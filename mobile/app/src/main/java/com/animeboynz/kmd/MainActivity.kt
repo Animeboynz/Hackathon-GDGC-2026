@@ -1,12 +1,12 @@
 package com.animeboynz.kmd
 
-import android.app.PendingIntent
 import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.nfc.tech.IsoDep
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -32,16 +32,17 @@ class MainActivity : BaseActivity() {
     private val generalPreferences: GeneralPreferences by inject()
 
     private var nfcAdapter: NfcAdapter? = null
-    private var nfcPendingIntent: PendingIntent? = null
-    private val nfcTechLists = arrayOf(arrayOf(IsoDep::class.java.name))
+    private var resumed = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val nfcConsumerStateListener: (Boolean) -> Unit = {
+        updateNfcReaderMode()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
-        val nfcIntent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        nfcPendingIntent = PendingIntent.getActivity(this, 0, nfcIntent, flags)
+        NfcTagDispatcher.addConsumerStateListener(nfcConsumerStateListener)
 
         handleNfcIntent(intent)
 
@@ -103,18 +104,53 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (NfcTagDispatcher.consumer != null && nfcAdapter != null && nfcPendingIntent != null) {
-            nfcAdapter?.enableForegroundDispatch(
-                this,
-                nfcPendingIntent,
-                null,
-                nfcTechLists,
-            )
-        }
+        resumed = true
+        updateNfcReaderMode()
     }
 
     override fun onPause() {
         super.onPause()
-        nfcAdapter?.disableForegroundDispatch(this)
+        resumed = false
+        disableNfcReaderMode()
+    }
+
+    override fun onDestroy() {
+        NfcTagDispatcher.removeConsumerStateListener(nfcConsumerStateListener)
+        super.onDestroy()
+    }
+
+    private fun updateNfcReaderMode() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { updateNfcReaderMode() }
+            return
+        }
+
+        val adapter = nfcAdapter ?: return
+        if (!resumed || NfcTagDispatcher.consumer == null) {
+            disableNfcReaderMode()
+            return
+        }
+
+        val flags = NfcAdapter.FLAG_READER_NFC_A or
+                NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
+        val options = Bundle().apply {
+            putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 500)
+        }
+        adapter.enableReaderMode(
+            this,
+            { tag -> NfcTagDispatcher.consumer?.invoke(tag) },
+            flags,
+            options,
+        )
+    }
+
+    private fun disableNfcReaderMode() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { disableNfcReaderMode() }
+            return
+        }
+
+        runCatching { nfcAdapter?.disableReaderMode(this) }
     }
 }

@@ -118,18 +118,18 @@ object PassportOnboardingScreen : Screen() {
         val state by screenModel.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
+        val nfcConsumerActive = state is PassportOnboardingScreenModel.State.WaitNfc
 
-        DisposableEffect(state) {
-            when (state) {
-                is PassportOnboardingScreenModel.State.WaitNfc -> {
-                    NfcTagDispatcher.consumer = { tag -> screenModel.onNfcTag(tag) }
-                }
-                else -> {
-                    NfcTagDispatcher.consumer = null
-                }
+        DisposableEffect(nfcConsumerActive) {
+            if (nfcConsumerActive) {
+                NfcTagDispatcher.consumer = { tag -> screenModel.onNfcTag(tag) }
+            } else {
+                NfcTagDispatcher.consumer = null
             }
             onDispose {
-                NfcTagDispatcher.consumer = null
+                if (nfcConsumerActive) {
+                    NfcTagDispatcher.consumer = null
+                }
             }
         }
 

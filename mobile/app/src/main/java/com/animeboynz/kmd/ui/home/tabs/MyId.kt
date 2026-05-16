@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.animeboynz.kmd.R
 import com.animeboynz.kmd.preferences.GeneralPreferences
@@ -76,6 +78,7 @@ object MyId : Tab {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        val tabNavigator = LocalTabNavigator.current
         val preferences = koinInject<GeneralPreferences>()
 
         PassportKycTheme {
@@ -102,7 +105,10 @@ object MyId : Tab {
                         .padding(horizontal = 16.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    DigitalIdDashboard(preferences)
+                    DigitalIdDashboard(
+                        preferences = preferences,
+                        onPresent = { tabNavigator.current = ToolsTab },
+                    )
                 }
             }
         }
@@ -110,12 +116,15 @@ object MyId : Tab {
 }
 
 @Composable
-private fun DigitalIdDashboard(preferences: GeneralPreferences) {
+private fun DigitalIdDashboard(
+    preferences: GeneralPreferences,
+    onPresent: () -> Unit,
+) {
     val generated = preferences.digitalIdGenerated.get()
     val holderName = preferences.digitalIdHolderName.get()
     val credentialId = preferences.digitalIdCredentialId.get()
     val documentNumber = preferences.digitalIdDocumentNumber.get()
-    val expiry = preferences.digitalIdExpiry.get()
+    val dateOfBirth = preferences.digitalIdDateOfBirth.get()
     val portraitBase64 = preferences.digitalIdPortraitBase64.get()
     val portraitBitmap = remember(portraitBase64) { portraitBase64.decodeBitmapOrNull() }
 
@@ -138,7 +147,6 @@ private fun DigitalIdDashboard(preferences: GeneralPreferences) {
                 )
             }
         }
-        Text("🎧", fontSize = 22.sp)
     }
 
     if (!generated) {
@@ -175,23 +183,13 @@ private fun DigitalIdDashboard(preferences: GeneralPreferences) {
         }
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 22.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        QuickAction("NFC read", "📘", PassportKycColors.border, Modifier.weight(1f))
-        QuickAction("Manage pass", "▦", PassportKycColors.lavender, Modifier.weight(1f))
-        QuickAction("Show QR", "▣", PassportKycColors.lavender2, Modifier.weight(1f))
-    }
-
     EmergencyIdPass(
         holderName = holderName,
         credentialId = credentialId,
         documentNumber = documentNumber,
-        expiry = expiry,
+        dateOfBirth = dateOfBirth,
         portraitBitmap = portraitBitmap,
+        onPresent = onPresent,
     )
 }
 
@@ -229,37 +227,13 @@ private fun EmptyDigitalIdCard() {
 }
 
 @Composable
-private fun QuickAction(label: String, icon: String, background: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(background),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(icon, fontSize = 22.sp, color = PassportKycColors.text)
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = PassportKycColors.text,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
 private fun EmergencyIdPass(
     holderName: String,
     credentialId: String,
     documentNumber: String,
-    expiry: String,
+    dateOfBirth: String,
     portraitBitmap: Bitmap?,
+    onPresent: () -> Unit,
 ) {
     Spacer(modifier = Modifier.height(28.dp))
     Text(
@@ -320,15 +294,13 @@ private fun EmergencyIdPass(
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     CredentialField("Holder", holderName, Modifier.weight(1f))
-                    CredentialField("Confidence", "98%", Modifier.weight(1f))
+                    CredentialField("DOB", dateOfBirth, Modifier.weight(1f))
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     CredentialField("Document", documentNumber, Modifier.weight(1f))
                     CredentialField("ID", credentialId, Modifier.weight(1f))
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                CredentialField("Expires", expiry, Modifier.fillMaxWidth())
 
                 Row(
                     modifier = Modifier
@@ -336,6 +308,7 @@ private fun EmergencyIdPass(
                         .padding(top = 24.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color.White)
+                        .clickable(onClick = onPresent)
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,

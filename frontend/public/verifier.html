@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VERID QR Verifier</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+      :root {
+        --page: #f2f4f8;
+        --mint: #f3f0fa;
+        --primary: #ae0086;
+        --primary-deep: #500040;
+        --lavender: #caa5ff;
+        --lavender-soft: #ede9fe;
+        --ink: #111827;
+        --muted: #374151;
+        --line: #cbd5e1;
+        --ok-bg: #f5dbe9;
+        --ok-border: #d946b8;
+        --shadow-card: 0 4px 24px rgba(17, 24, 39, 0.06);
+        --shadow-lift: 0 12px 40px rgba(17, 24, 39, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--page);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .shell {
+        width: min(100%, 430px);
+        min-height: 100dvh;
+        margin: 0 auto;
+        padding: 18px 16px 28px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0 18px;
+      }
+
+      .logo {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 3px solid var(--primary);
+        background: #fff;
+        font-weight: 900;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 1.45rem;
+        line-height: 1.15;
+        letter-spacing: -0.03em;
+      }
+
+      .card {
+        border: 2px solid var(--line);
+        border-radius: 28px;
+        background: #fff;
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+
+      .scanner-card {
+        padding: 16px;
+      }
+
+      #reader {
+        overflow: hidden;
+        border-radius: 22px;
+        background: #0f172a;
+      }
+
+      #reader video {
+        object-fit: cover;
+      }
+
+      #reader__scan_region {
+        background: #0f172a;
+      }
+
+      #reader button,
+      .btn {
+        min-height: 48px;
+        border: 2px solid var(--primary-deep);
+        border-radius: 16px;
+        background: var(--primary);
+        color: #fff;
+        padding: 10px 14px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      #reader select {
+        max-width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 6px 10px;
+      }
+
+      .help {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 0.86rem;
+        line-height: 1.45;
+      }
+
+      .status {
+        margin: 16px 0;
+        padding: 12px 14px;
+        border: 1px solid var(--ok-border);
+        border-radius: 14px;
+        background: var(--ok-bg);
+        color: var(--primary-deep);
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .credential {
+        margin-top: 18px;
+        border-radius: 28px;
+        background: linear-gradient(135deg, #0f172a, #1e293b 55%, #0f172a);
+        color: #fff;
+        box-shadow: var(--shadow-lift);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .credential::after {
+        content: "";
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        top: -40px;
+        right: -50px;
+        border-radius: 999px;
+        background: rgba(174, 0, 134, 0.35);
+        filter: blur(2px);
+      }
+
+      .credential-inner {
+        position: relative;
+        z-index: 1;
+        padding: 22px;
+      }
+
+      .photo {
+        width: 92px;
+        height: 92px;
+        border-radius: 50%;
+        border: 3px solid var(--primary);
+        background: #fff;
+        object-fit: cover;
+      }
+
+      .photo-placeholder {
+        display: grid;
+        place-items: center;
+        color: var(--primary);
+        font-size: 2.5rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        margin-top: 14px;
+        border-radius: 999px;
+        background: var(--lavender);
+        color: var(--ink);
+        padding: 6px 12px;
+        font-size: 0.74rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .credential h2 {
+        margin-top: 14px;
+        font-size: 1.65rem;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+      }
+
+      .credential-sub {
+        margin-top: 5px;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 0.9rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 18px;
+        margin-top: 26px;
+      }
+
+      .field-label {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.78rem;
+      }
+
+      .field-value {
+        margin-top: 3px;
+        color: #fff;
+        font-size: 0.95rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+      }
+
+      .payload-card {
+        margin-top: 16px;
+        padding: 16px;
+      }
+
+      pre {
+        max-height: 180px;
+        overflow: auto;
+        margin: 12px 0 0;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--mint);
+        color: var(--ink);
+        font-size: 0.72rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div class="logo">V</div>
+        <div>
+          <p class="eyebrow">VERID verifier</p>
+          <h1>Scan a Digital ID QR</h1>
+        </div>
+      </header>
+
+      <section class="card scanner-card">
+        <div id="reader"></div>
+        <p class="help">
+          Point your camera at the QR shown in the mobile app. Camera access requires localhost or HTTPS in most browsers.
+        </p>
+      </section>
+
+      <p id="status" class="status">Waiting for QR scan…</p>
+
+      <section id="credential" class="credential hidden" aria-live="polite">
+        <div class="credential-inner">
+          <img id="photo" class="photo hidden" alt="ID holder photo" />
+          <div id="photoPlaceholder" class="photo photo-placeholder">👤</div>
+          <div class="pill">Verified</div>
+          <h2 id="holderName">Digital ID</h2>
+          <p id="subtitle" class="credential-sub">Passport chip + photo + selfie</p>
+
+          <div class="grid">
+            <div>
+              <div class="field-label">Credential ID</div>
+              <div id="credentialId" class="field-value">-</div>
+            </div>
+            <div>
+              <div class="field-label">DOB</div>
+              <div id="dateOfBirth" class="field-value">-</div>
+            </div>
+            <div>
+              <div class="field-label">Document</div>
+              <div id="documentNumber" class="field-value">-</div>
+            </div>
+            <div>
+              <div class="field-label">Method</div>
+              <div id="method" class="field-value">QR</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="payloadSection" class="card payload-card hidden">
+        <p class="eyebrow">Decoded payload</p>
+        <pre id="payloadText"></pre>
+      </section>
+    </main>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const credentialEl = document.getElementById("credential");
+      const payloadSectionEl = document.getElementById("payloadSection");
+      const payloadTextEl = document.getElementById("payloadText");
+      const photoEl = document.getElementById("photo");
+      const photoPlaceholderEl = document.getElementById("photoPlaceholder");
+
+      function setStatus(message, ok = false) {
+        statusEl.textContent = message;
+        statusEl.style.borderColor = ok ? "#d946b8" : "#cbd5e1";
+        statusEl.style.background = ok ? "#f5dbe9" : "#fff";
+      }
+
+      function normalisePayload(raw) {
+        const data = JSON.parse(raw);
+        return {
+          raw: data,
+          type: data.t || data.type || "verid",
+          name: data.n || data.name || data.holderName || "Unknown holder",
+          credentialId: data.cid || data.credentialId || "-",
+          documentNumber: data.doc || data.documentNumber || "-",
+          dateOfBirth: data.dob || data.dateOfBirth || "-",
+          method: data.m || data.method || data.verificationMethod || "QR",
+          imageBase64: data.img || data.photoBase64 || "",
+        };
+      }
+
+      function renderCredential(decoded) {
+        document.getElementById("holderName").textContent = decoded.name;
+        document.getElementById("credentialId").textContent = decoded.credentialId;
+        document.getElementById("documentNumber").textContent = decoded.documentNumber;
+        document.getElementById("dateOfBirth").textContent = decoded.dateOfBirth;
+        document.getElementById("method").textContent = decoded.method;
+        document.getElementById("subtitle").textContent = `${decoded.type} · ${decoded.method}`;
+
+        if (decoded.imageBase64) {
+          photoEl.src = `data:image/jpeg;base64,${decoded.imageBase64}`;
+          photoEl.classList.remove("hidden");
+          photoPlaceholderEl.classList.add("hidden");
+        } else {
+          photoEl.classList.add("hidden");
+          photoPlaceholderEl.classList.remove("hidden");
+        }
+
+        credentialEl.classList.remove("hidden");
+        payloadSectionEl.classList.remove("hidden");
+        payloadTextEl.textContent = JSON.stringify(decoded.raw, null, 2);
+      }
+
+      async function onScanSuccess(decodedText) {
+        try {
+          const decoded = normalisePayload(decodedText);
+          renderCredential(decoded);
+          setStatus("Digital ID decoded successfully.", true);
+          await scanner.stop();
+        } catch (error) {
+          setStatus(`Scanned QR, but it was not a valid VERID payload: ${error.message}`);
+        }
+      }
+
+      const scanner = new Html5Qrcode("reader");
+
+      Html5Qrcode.getCameras()
+        .then((cameras) => {
+          if (!cameras.length) {
+            setStatus("No camera found.");
+            return;
+          }
+
+          const backCamera =
+            cameras.find((camera) => /back|rear|environment/i.test(camera.label)) || cameras[0];
+
+          scanner.start(
+            backCamera.id,
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+              aspectRatio: 1,
+            },
+            onScanSuccess,
+            () => {}
+          );
+        })
+        .catch((error) => {
+          setStatus(`Could not start camera: ${error.message || error}`);
+        });
+    </script>
+  </body>
+</html>

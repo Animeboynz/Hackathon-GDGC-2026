@@ -179,6 +179,7 @@ class PassportOnboardingScreenModel(
 
         generalPreferences.digitalIdHolderName.set(holderName)
         generalPreferences.digitalIdDocumentNumber.set(documentNumber)
+        generalPreferences.digitalIdDateOfBirth.set(mrz.dateOfBirth.toDisplayDate())
         generalPreferences.digitalIdExpiry.set(mrz.dateOfExpiry.ifBlank { "2030-01-01" })
         generalPreferences.digitalIdCredentialId.set(credentialId)
         summary.portrait?.let { portrait ->
@@ -196,5 +197,10 @@ class PassportOnboardingScreenModel(
         val output = ByteArrayOutputStream()
         compress(Bitmap.CompressFormat.JPEG, 86, output)
         return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+    }
+
+    private fun String.toDisplayDate(): String {
+        if (length != 6) return ifBlank { "Unknown" }
+        return "${substring(4, 6)}/${substring(2, 4)}/${substring(0, 2)}"
     }
 }
