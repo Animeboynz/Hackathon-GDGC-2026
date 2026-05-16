@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Solid fills + borders so primary actions stay visible on tinted backgrounds (esp. iOS button styling). */
+@layer components {
+  .verid-btn-primary {
+    @apply inline-flex min-h-[52px] w-full appearance-none items-center justify-center rounded-2xl border-2 border-[#500040] bg-[#ae0086] px-4 py-3.5 text-base font-bold text-white shadow-md outline-none ring-offset-2 transition-colors hover:border-[#400035] hover:bg-[#920071] hover:shadow-lg active:bg-[#800068] disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-slate-400 disabled:bg-slate-200 disabled:text-slate-700 disabled:shadow-none;
+  }
+
+  .verid-btn-secondary {
+    @apply inline-flex min-h-[52px] w-full appearance-none items-center justify-center rounded-2xl border-2 border-slate-500 bg-white px-4 py-3.5 text-base font-semibold text-inspo-ink shadow-sm outline-none transition-colors hover:border-slate-600 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none;
+  }
+}

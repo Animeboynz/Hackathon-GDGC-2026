@@ -1,36 +1,61 @@
 import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import {
+  EmergencyHub,
+  EmergencyIntro,
+  EmergencyIssue,
+  EmergencyPhoto,
+  EmergencySelfie,
+  PresentCredential,
+} from "./EmergencyIdentitySteps.jsx";
 
-const BRAND = "Passport Verify";
+const BRAND = "VERID";
 
-/** Steps: residency → passport intro → NFC scan → overview */
+function progressWidth(step, emergencyComplete) {
+  switch (step) {
+    case "residency":
+      return "16%";
+    case "passportIntro":
+      return "30%";
+    case "nfcScan":
+      return "44%";
+    case "overview":
+      return emergencyComplete ? "88%" : "52%";
+    case "emergencyIntro":
+      return "56%";
+    case "emergencyPhoto":
+      return "62%";
+    case "emergencySelfie":
+      return "70%";
+    case "emergencyIssue":
+      return "78%";
+    case "emergencyHub":
+    case "emergencyPresent":
+      return "100%";
+    default:
+      return "12%";
+  }
+}
+
+/** Passport NFC + Emergency ID — single seamless flow */
 export default function FlowVerification() {
   const [step, setStep] = useState("residency");
   const [residency, setResidency] = useState(null);
   const [nfcPhase, setNfcPhase] = useState(0);
-  const [passportToast, setPassportToast] = useState(false);
-  const [chipToast, setChipToast] = useState(false);
   const [overviewChipDone, setOverviewChipDone] = useState(false);
+  const [emergencyComplete, setEmergencyComplete] = useState(false);
 
   useEffect(() => {
     if (step !== "overview") return;
-    setPassportToast(false);
-    setChipToast(false);
     setOverviewChipDone(false);
     let cancelled = false;
-    const t0 = setTimeout(() => {
-      if (!cancelled) setPassportToast(true);
-    }, 120);
-    const t1 = setTimeout(() => {
-      if (!cancelled) setChipToast(true);
-    }, 450);
-    const t2 = setTimeout(() => {
+    const t = setTimeout(() => {
       if (!cancelled) setOverviewChipDone(true);
     }, 2600);
     return () => {
       cancelled = true;
-      clearTimeout(t0);
-      clearTimeout(t1);
-      clearTimeout(t2);
+      clearTimeout(t);
     };
   }, [step]);
 
@@ -59,96 +84,155 @@ export default function FlowVerification() {
     setStep("residency");
     setResidency(null);
     setNfcPhase(0);
-    setPassportToast(false);
-    setChipToast(false);
     setOverviewChipDone(false);
+    setEmergencyComplete(false);
   };
 
+  const btnPrimary = "verid-btn-primary";
+
+  const btnSecondary = "verid-btn-secondary";
+
+  const hideFooterBrand = step === "nfcScan";
+
   return (
-    <div className="kyc-root">
-      <div className={`kyc-screen kyc-screen--${step}`} key={step}>
+    <div className="min-h-full min-h-[100dvh] bg-inspo-mint2 px-4 pb-28 pt-5">
+      <div className="mx-auto mb-5 h-2.5 max-w-[260px] overflow-hidden rounded-full border border-slate-400/70 bg-slate-300 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
+        <motion.div
+          className="h-full rounded-full bg-[#ae0086] shadow-[0_0_12px_rgba(174,0,134,0.55)]"
+          initial={{ width: "12%" }}
+          animate={{ width: progressWidth(step, emergencyComplete) }}
+          transition={{ type: "spring", stiffness: 120, damping: 18 }}
+        />
+      </div>
+
+      <motion.div
+        key={step}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28 }}
+      >
         {step === "residency" && (
-          <>
-            <h1 className="kyc-title">I&apos;m resident of or live in:</h1>
-            <p className="kyc-subtitle kyc-subtitle--tight">
-              Next, we&apos;ll verify your <strong>passport</strong> using the built-in NFC chip.
-            </p>
-            <div className="kyc-card kyc-radio-list">
-              <label className={`kyc-radio-row ${residency === "us" ? "is-selected" : ""}`}>
-                <input
-                  type="radio"
-                  name="res"
-                  checked={residency === "us"}
-                  onChange={() => setResidency("us")}
-                />
-                <span className="kyc-radio-label">
-                  <span className="kyc-radio-icon" aria-hidden>
-                    🇺🇸
+          <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-md flex-col">
+            <div className="flex-1">
+              <p className="text-center text-xs font-semibold uppercase tracking-[0.12em] text-inspo-muted">
+                Identity verification
+              </p>
+              <h1 className="mt-2 text-center text-2xl font-bold leading-tight tracking-tight text-inspo-ink">
+                I&apos;m resident of or live in:
+              </h1>
+              <p className="mt-2 text-center text-sm leading-relaxed text-inspo-muted">
+                Next we&apos;ll verify your <strong className="text-inspo-ink">passport</strong> using
+                NFC, then you can set up your Emergency ID.
+              </p>
+
+              <div className="mt-6 overflow-hidden rounded-3xl border-2 border-inspo-line bg-white shadow-card">
+                <label
+                  className={cn(
+                    "flex min-h-[56px] cursor-pointer items-center gap-3 border-b border-inspo-line px-4 py-3.5 transition",
+                    residency === "nz" && "border-l-4 border-l-inspo-lime bg-inspo-okBg"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="res"
+                    className="h-5 w-5 accent-[#ae0086]"
+                    checked={residency === "nz"}
+                    onChange={() => setResidency("nz")}
+                  />
+                  <span className="text-2xl" aria-hidden>
+                    🇳🇿
                   </span>
-                  United States of America
-                </span>
-              </label>
-              <label className={`kyc-radio-row ${residency === "other" ? "is-selected" : ""}`}>
-                <input
-                  type="radio"
-                  name="res"
-                  checked={residency === "other"}
-                  onChange={() => setResidency("other")}
-                />
-                <span className="kyc-radio-label">
-                  <span className="kyc-radio-icon" aria-hidden>
+                  <span className="font-medium text-inspo-ink">New Zealand</span>
+                </label>
+                <label
+                  className={cn(
+                    "flex min-h-[56px] cursor-pointer items-center gap-3 px-4 py-3.5 transition",
+                    residency === "other" && "border-l-4 border-l-inspo-lime bg-inspo-okBg"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="res"
+                    className="h-5 w-5 accent-[#ae0086]"
+                    checked={residency === "other"}
+                    onChange={() => setResidency("other")}
+                  />
+                  <span className="text-2xl" aria-hidden>
                     🌐
                   </span>
-                  Other
-                </span>
-              </label>
+                  <span className="font-medium text-inspo-ink">Other</span>
+                </label>
+              </div>
             </div>
-            <button
-              type="button"
-              className="kyc-btn-primary"
-              disabled={!residency}
-              onClick={() => setStep("passportIntro")}
-            >
-              Agree and continue
-            </button>
-          </>
+
+            <div className="mt-auto space-y-3 pt-6">
+              <button
+                type="button"
+                disabled={!residency}
+                className={btnPrimary}
+                onClick={() => setStep("passportIntro")}
+              >
+                Agree and continue
+              </button>
+            </div>
+          </div>
         )}
 
         {step === "passportIntro" && (
-          <>
-            <h1 className="kyc-title">Verify your passport</h1>
-            <p className="kyc-subtitle">
-              We read the secure NFC chip inside your <strong>e-passport</strong>. No photos of
-              the inside pages are needed for this step.
-            </p>
-            <div className="kyc-card kyc-nfc-hero-card">
-              <div className="kyc-nfc-hero-visual" aria-hidden>
-                <div className="kyc-nfc-hero-phone">📱</div>
-                <div className="kyc-nfc-hero-passport">📘</div>
-                <div className="kyc-nfc-hero-waves">
-                  <span />
-                  <span />
-                  <span />
+          <div className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-md flex-col">
+            <div className="flex-1">
+              <h1 className="text-center text-2xl font-bold text-inspo-ink">Verify your passport</h1>
+              <p className="mt-2 text-center text-sm leading-relaxed text-inspo-muted">
+                We read the secure NFC chip in your <strong className="text-inspo-ink">e-passport</strong>.
+                It only takes a minute.
+              </p>
+
+              <div className="mt-6 rounded-3xl border-2 border-inspo-line bg-white p-5 shadow-card">
+                <div className="relative flex h-32 items-center justify-center">
+                  <div className="text-5xl" aria-hidden>
+                    📱
+                  </div>
+                  <div className="absolute translate-x-10 translate-y-2 text-4xl" aria-hidden>
+                    📘
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="h-24 w-24 rounded-full border-2 border-inspo-lime" />
+                    <span className="absolute h-32 w-32 rounded-full border-2 border-inspo-lavender" />
+                  </div>
                 </div>
+                <ul className="mt-4 space-y-2 text-sm leading-relaxed text-inspo-muted">
+                  <li className="flex gap-2">
+                    <span className="font-bold text-inspo-limeDeep">✓</span>
+                    Passport shows the <strong className="text-inspo-ink">chip symbol</strong>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="font-bold text-inspo-limeDeep">✓</span>
+                    Remove thick covers or metal near the chip
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="font-bold text-inspo-limeDeep">✓</span>
+                    Phone flat on the passport — try the back cover first
+                  </li>
+                </ul>
               </div>
-              <ul className="kyc-nfc-hero-list">
-                <li>Use a passport with the <strong>chip symbol</strong> on the cover</li>
-                <li>Remove covers, stickers, or metal objects</li>
-                <li>Hold your phone flat against the passport — try the back cover first</li>
-              </ul>
             </div>
-            <button type="button" className="kyc-btn-primary" onClick={() => setStep("nfcScan")}>
-              Read passport chip
-            </button>
-          </>
+            <div className="mt-auto flex flex-col gap-3 pt-6">
+              <button type="button" className={btnPrimary} onClick={() => setStep("nfcScan")}>
+                Read passport chip
+              </button>
+              <button type="button" className={btnSecondary} onClick={() => setStep("residency")}>
+                Back
+              </button>
+            </div>
+          </div>
         )}
 
         {step === "nfcScan" && (
-          <div className="kyc-nfc-scan">
+          <div className="mx-auto flex min-h-[65vh] max-w-md flex-col items-center rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-center text-white shadow-lift">
             <button
               type="button"
-              className="kyc-icon-btn kyc-nfc-scan-close"
               aria-label="Cancel"
+              className="self-end appearance-none rounded-full border border-white/35 bg-white/15 px-3 py-2 text-lg text-white hover:bg-white/25"
               onClick={() => {
                 setStep("passportIntro");
                 setNfcPhase(0);
@@ -156,88 +240,88 @@ export default function FlowVerification() {
             >
               ✕
             </button>
-            <div className="kyc-nfc-scan-stage">
-              <div className="kyc-nfc-scan-waves" aria-hidden>
-                <div className="kyc-nfc-scan-wave kyc-nfc-scan-wave--1" />
-                <div className="kyc-nfc-scan-wave kyc-nfc-scan-wave--2" />
-                <div className="kyc-nfc-scan-wave kyc-nfc-scan-wave--3" />
+            <div className="relative mt-4 h-44 w-44">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="h-28 w-28 rounded-full border-2 border-inspo-lavender shadow-[0_0_20px_rgba(202,165,255,0.55)]" />
+                <span className="absolute h-40 w-40 rounded-full border-2 border-blue-400/55" />
+                <span className="absolute h-52 w-52 rounded-full border border-white/25" />
               </div>
-              <div className="kyc-nfc-scan-passport" aria-hidden>
-                📘
-              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-6xl">📘</div>
             </div>
-            <p className="kyc-nfc-scan-title">Hold your phone to your passport</p>
-            <p className="kyc-nfc-scan-sub">
-              Align the top edge of your phone with the passport cover near the chip symbol. Keep
-              steady until the read finishes.
+            <h2 className="mt-8 text-xl font-bold">Hold your phone to your passport</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              Align with the chip symbol on the cover. Keep steady until the read finishes.
             </p>
-            <ul className="kyc-nfc-scan-checklist">
-              <li className={nfcPhase >= 1 ? "is-done" : ""}>
-                {nfcPhase >= 1 ? "✓" : "○"} Chip detected
-              </li>
-              <li className={nfcPhase >= 2 ? "is-done" : ""}>
-                {nfcPhase >= 2 ? "✓" : "○"} Reading passport data
-              </li>
-              <li className={nfcPhase >= 3 ? "is-done" : ""}>
-                {nfcPhase >= 3 ? "✓" : "○"} Securing session
-              </li>
+            <ul className="mt-8 w-full max-w-xs space-y-2 text-left text-sm">
+              {[
+                { n: 1, label: "Chip detected" },
+                { n: 2, label: "Reading passport data" },
+                { n: 3, label: "Securing session" },
+              ].map(({ n, label }) => (
+                <li
+                  key={n}
+                  className={cn(
+                    "flex min-h-[48px] items-center gap-3 rounded-2xl border px-3 transition",
+                    nfcPhase >= n
+                      ? "border-2 border-inspo-lavender bg-[#ae0086]/55 text-white shadow-[0_0_16px_rgba(174,0,134,0.45)]"
+                      : "border border-white/30 bg-white/10 text-slate-200"
+                  )}
+                >
+                  <span className="font-mono">{nfcPhase >= n ? "✓" : "○"}</span>
+                  {label}
+                </li>
+              ))}
             </ul>
           </div>
         )}
 
         {step === "overview" && (
-          <div className="kyc-overview">
-            <div className="kyc-toasts" aria-live="polite">
-              {passportToast && (
-                <div className="kyc-toast kyc-toast--ok">
-                  <span className="kyc-toast-icon">✓</span>
-                  <span>Passport connected</span>
-                </div>
-              )}
-              {chipToast && (
-                <div
-                  className={`kyc-toast ${overviewChipDone ? "kyc-toast--ok" : "kyc-toast--pending"}`}
-                >
-                  <span className="kyc-toast-icon">{overviewChipDone ? "✓" : "⋯"}</span>
-                  <span>Chip verified</span>
-                </div>
-              )}
-            </div>
-
-            <div className="kyc-card kyc-overview-card">
-              <h2 className="kyc-overview-head">Your passport is being verified</h2>
-              <p className="kyc-overview-sub">NFC read from your e-passport</p>
-              <ul className="kyc-step-list">
-                <li className="kyc-step-row">
-                  <span className="kyc-step-icon kyc-step-icon--done">📘</span>
+          <div className="mx-auto max-w-md">
+            <div className="mt-10 rounded-3xl border-2 border-inspo-line bg-white p-5 shadow-card">
+              <h2 className="text-lg font-bold text-inspo-ink">Passport verified</h2>
+              <p className="mt-1 text-sm text-inspo-muted">NFC read from your e-passport</p>
+              <ul className="mt-5 divide-y divide-inspo-line">
+                <li className="flex gap-3 py-4">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-inspo-mint text-xl">
+                    📘
+                  </span>
                   <div>
-                    <div className="kyc-step-name">Passport chip read</div>
-                    <div className="kyc-step-meta">Data received from NFC</div>
+                    <p className="font-semibold text-inspo-ink">Passport chip read</p>
+                    <p className="text-xs text-inspo-muted">Data received from NFC</p>
                   </div>
                 </li>
-                <li className="kyc-step-row">
-                  <span className="kyc-step-icon kyc-step-icon--done">✓</span>
+                <li className="flex gap-3 py-4">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-inspo-lavender text-lg font-bold text-inspo-ink ring-1 ring-inspo-lime/35">
+                    ✓
+                  </span>
                   <div>
-                    <div className="kyc-step-name">Passport checks</div>
-                    <div className="kyc-step-meta">Chip data validated</div>
+                    <p className="font-semibold text-inspo-ink">Passport checks</p>
+                    <p className="text-xs text-inspo-muted">Chip data validated</p>
                   </div>
                 </li>
               </ul>
             </div>
 
-            <div className="kyc-card kyc-progress-card">
-              <div className="kyc-progress-face kyc-progress-face--passport" aria-hidden>
-                <span>📘</span>
+            <div className="mt-4 flex gap-3 rounded-3xl border-2 border-inspo-line bg-white p-4 shadow-card">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-inspo-lavender text-2xl">
+                📘
               </div>
-              <div className="kyc-status-rows">
-                <div className="kyc-status-row">
-                  <span>Passport</span>
-                  <span className="kyc-pill kyc-pill--approved">Approved</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="font-medium text-inspo-ink">Passport</span>
+                  <span className="rounded-full bg-inspo-okBg px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-inspo-ok">
+                    Approved
+                  </span>
                 </div>
-                <div className="kyc-status-row">
-                  <span>NFC chip</span>
+                <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+                  <span className="font-medium text-inspo-ink">NFC chip</span>
                   <span
-                    className={`kyc-pill ${overviewChipDone ? "kyc-pill--approved" : "kyc-pill--progress"}`}
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                      overviewChipDone
+                        ? "bg-inspo-okBg text-inspo-ok"
+                        : "bg-blue-100 text-inspo-blue"
+                    )}
                   >
                     {overviewChipDone ? "Verified" : "In progress"}
                   </span>
@@ -245,27 +329,101 @@ export default function FlowVerification() {
               </div>
             </div>
 
-            <div className="kyc-card kyc-nfc-card">
-              <div className="kyc-nfc-illus" aria-hidden>
-                <div className="kyc-nfc-phone">📱</div>
-                <div className="kyc-nfc-doc">📘</div>
+            <div className="mt-4 rounded-3xl border-2 border-inspo-line bg-white p-5 text-center shadow-card">
+              <div className="mx-auto flex w-fit items-end justify-center gap-1 text-3xl">
+                <span>📱</span>
+                <span className="text-2xl">📘</span>
               </div>
-              <h3 className="kyc-nfc-title">Need another read?</h3>
-              <p className="kyc-nfc-sub">
-                Lift your phone, wait a second, and tap the passport cover again until you feel
-                confirmation.
+              <h3 className="mt-3 font-bold text-inspo-ink">Need another read?</h3>
+              <p className="mt-1 text-sm text-inspo-muted">
+                Lift your phone, wait a moment, then tap the passport cover again from the intro step.
               </p>
             </div>
 
-            <button type="button" className="kyc-btn-primary" onClick={resetAll}>
-              Verify another passport
+            <div className="mt-8 flex flex-col gap-3">
+              {!emergencyComplete ? (
+                <>
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => setStep("emergencyIntro")}
+                  >
+                    Continue to Emergency ID
+                  </button>
+                  <button type="button" className={btnSecondary} onClick={resetAll}>
+                    Verify another passport
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    onClick={() => setStep("emergencyHub")}
+                  >
+                    Open Emergency ID
+                  </button>
+                  <button
+                    type="button"
+                    className={btnSecondary}
+                    onClick={() => setStep("emergencyPresent")}
+                  >
+                    Show QR
+                  </button>
+                  <button type="button" className={btnSecondary} onClick={resetAll}>
+                    Start over
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {step === "emergencyIntro" && (
+          <EmergencyIntro
+            onNext={() => setStep("emergencyPhoto")}
+            onBack={() => setStep("overview")}
+          />
+        )}
+        {step === "emergencyPhoto" && (
+          <EmergencyPhoto
+            onNext={() => setStep("emergencySelfie")}
+            onBack={() => setStep("emergencyIntro")}
+          />
+        )}
+        {step === "emergencySelfie" && (
+          <EmergencySelfie
+            onNext={() => setStep("emergencyIssue")}
+            onBack={() => setStep("emergencyPhoto")}
+          />
+        )}
+        {step === "emergencyIssue" && (
+          <EmergencyIssue
+            onDone={() => {
+              setEmergencyComplete(true);
+              setStep("emergencyHub");
+            }}
+          />
+        )}
+        {step === "emergencyHub" && (
+          <div className="mx-auto max-w-md">
+            <EmergencyHub onPresent={() => setStep("emergencyPresent")} />
+            <button
+              type="button"
+              className={cn(btnSecondary, "mt-6")}
+              onClick={() => setStep("overview")}
+            >
+              Passport summary
             </button>
           </div>
         )}
-      </div>
+        {step === "emergencyPresent" && (
+          <PresentCredential onBack={() => setStep("emergencyHub")} />
+        )}
+      </motion.div>
 
-      {step !== "nfcScan" && (
-        <footer className="kyc-footer">Powered by {BRAND}</footer>
+      {!hideFooterBrand && (
+        <p className="mt-8 text-center text-xs text-inspo-muted">Powered by {BRAND}</p>
       )}
     </div>
   );
