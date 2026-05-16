@@ -1,33 +1,31 @@
 package com.animeboynz.kmd.ui.onboarding
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.SystemClock
-import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,39 +33,32 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.animeboynz.kmd.BuildConfig
 import com.animeboynz.kmd.R
 import com.animeboynz.kmd.nfc.NfcTagDispatcher
-import com.animeboynz.kmd.passport.MrzLiveFrameProcessor
 import com.animeboynz.kmd.passport.PassportChipSummary
 import com.animeboynz.kmd.passport.Td3Mrz
 import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.animeboynz.kmd.presentation.Screen
 import com.animeboynz.kmd.ui.home.HomeScreen
+import com.dynamsoft.mrzscannerbundle.ui.MRZScanResult
+import com.dynamsoft.mrzscannerbundle.ui.MRZScannerActivity
+import com.dynamsoft.mrzscannerbundle.ui.MRZScannerConfig
 import org.jmrtd.lds.icao.MRZInfo
 import org.koin.compose.koinInject
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicLong
 
 object PassportOnboardingScreen : Screen() {
     private fun readResolve(): Any = PassportOnboardingScreen
@@ -116,8 +107,8 @@ object PassportOnboardingScreen : Screen() {
                         onManual = { screenModel.openManualEntry() },
                     )
 
-                    is PassportOnboardingScreenModel.State.ScanPhoto -> PassportCameraStep(
-                        onMrzFound = { screenModel.onMrzDetectedFromCamera(it) },
+                    is PassportOnboardingScreenModel.State.ScanPhoto -> PassportDynamsoftScanStep(
+                        onScanResult = { screenModel.onDynamsoftMrzResult(it) },
                         onManualInstead = { screenModel.openManualEntry() },
                     )
 
@@ -137,7 +128,7 @@ object PassportOnboardingScreen : Screen() {
                         onBack = { screenModel.goToScan() },
                     )
 
-                    is PassportOnboardingScreenModel.State.WaitNfc -> WaitNfcStep()
+                    is PassportOnboardingScreenModel.State.WaitNfc -> WaitNfcStep(isReading = s.isReading)
 
                     is PassportOnboardingScreenModel.State.ChipRead -> ChipResultStep(
                         summary = s.summary,
@@ -177,144 +168,44 @@ private fun WelcomeStep(
 }
 
 @Composable
-private fun PassportCameraStep(
-    onMrzFound: (Td3Mrz) -> Unit,
+private fun PassportDynamsoftScanStep(
+    onScanResult: (MRZScanResult?) -> Unit,
     onManualInstead: () -> Unit,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
-
-    val previewView = remember {
-        PreviewView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            )
-            scaleType = PreviewView.ScaleType.FILL_CENTER
+    val scannerConfig = remember {
+        MRZScannerConfig().apply {
+            setLicense(BuildConfig.DYNAMSOFT_LICENSE_KEY)
+            setCameraToggleButtonVisible(true)
         }
     }
+    val launcher = rememberLauncherForActivityResult(
+        MRZScannerActivity.ResultContract(),
+        onScanResult,
+    )
 
-    val analysisExecutor = remember {
-        Executors.newSingleThreadExecutor { r ->
-            Thread(r, "passport-mrz").apply { isDaemon = true }
-        }
+    Text(
+        text = context.getString(R.string.passport_onboarding_scan_instructions),
+        style = MaterialTheme.typography.bodyLarge,
+    )
+    Button(
+        onClick = { launcher.launch(scannerConfig) },
+        enabled = BuildConfig.DYNAMSOFT_LICENSE_KEY.isNotBlank(),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(context.getString(R.string.passport_onboarding_open_mrz_scanner))
     }
-    val lastFrameProcessedMs = remember { AtomicLong(0L) }
-
-    var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                PackageManager.PERMISSION_GRANTED,
+    if (BuildConfig.DYNAMSOFT_LICENSE_KEY.isBlank()) {
+        Text(
+            text = context.getString(R.string.passport_onboarding_dynamsoft_license_hint),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
         )
     }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        hasPermission = granted
-    }
-
-    LaunchedEffect(Unit) {
-        if (!hasPermission) {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    DisposableEffect(lifecycleOwner, hasPermission) {
-        if (!hasPermission) {
-            return@DisposableEffect onDispose { }
-        }
-        val future = ProcessCameraProvider.getInstance(context)
-        val bindExecutor = ContextCompat.getMainExecutor(context)
-        val analysis = ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-
-        analysis.setAnalyzer(analysisExecutor) { imageProxy ->
-            val now = SystemClock.elapsedRealtime()
-            val prev = lastFrameProcessedMs.get()
-            if (now - prev < MRZ_FRAME_MIN_INTERVAL_MS) {
-                imageProxy.close()
-                return@setAnalyzer
-            }
-            lastFrameProcessedMs.set(now)
-
-            val mrz = try {
-                MrzLiveFrameProcessor.scan(imageProxy)
-            } finally {
-                imageProxy.close()
-            }
-            if (mrz != null) {
-                mainExecutor.execute { onMrzFound(mrz) }
-            }
-        }
-
-        future.addListener(
-            {
-                try {
-                    val provider = future.get()
-                    val preview = Preview.Builder().build().also {
-                        it.surfaceProvider = previewView.surfaceProvider
-                    }
-                    provider.unbindAll()
-                    provider.bindToLifecycle(
-                        lifecycleOwner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
-                        preview,
-                        analysis,
-                    )
-                } catch (_: Exception) {
-                }
-            },
-            bindExecutor,
-        )
-        onDispose {
-            analysis.clearAnalyzer()
-            analysisExecutor.shutdownNow()
-            bindExecutor.execute {
-                try {
-                    if (future.isDone) {
-                        future.get().unbindAll()
-                    }
-                } catch (_: Exception) {
-                }
-            }
-        }
-    }
-
-    Text(text = context.getString(R.string.passport_onboarding_scan_instructions))
-
-    if (hasPermission) {
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(320.dp),
-            factory = { previewView },
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp))
-            Text(
-                text = context.getString(R.string.passport_onboarding_scanning_mrz),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    } else {
-        Text(text = context.getString(R.string.passport_onboarding_camera_denied))
-    }
-
     TextButton(onClick = onManualInstead, modifier = Modifier.fillMaxWidth()) {
         Text(context.getString(R.string.passport_onboarding_enter_mrz_manual))
     }
 }
-
-private const val MRZ_FRAME_MIN_INTERVAL_MS = 280L
 
 @Composable
 private fun ReviewMrzStep(
@@ -371,17 +262,75 @@ private fun ManualMrzStep(
         Text(context.getString(R.string.passport_onboarding_validate_mrz))
     }
     TextButton(onClick = onBack) {
-        Text(context.getString(R.string.passport_onboarding_back_camera))
+        Text(context.getString(R.string.passport_onboarding_back_scan))
     }
 }
 
 @Composable
-private fun WaitNfcStep() {
+private fun WaitNfcStep(isReading: Boolean) {
     val context = LocalContext.current
-    Text(
-        text = context.getString(R.string.passport_onboarding_nfc_instructions),
-        style = MaterialTheme.typography.bodyLarge,
-    )
+    var elapsedSec by remember { mutableIntStateOf(0) }
+    LaunchedEffect(isReading) {
+        if (!isReading) {
+            elapsedSec = 0
+            return@LaunchedEffect
+        }
+        elapsedSec = 0
+        while (true) {
+            delay(1_000)
+            elapsedSec++
+        }
+    }
+
+    if (isReading) {
+        Text(
+            text = context.getString(R.string.passport_onboarding_nfc_reading_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = context.getString(R.string.passport_onboarding_nfc_reading_body),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(48.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = context.getString(R.string.passport_onboarding_nfc_reading_progress_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = context.getString(R.string.passport_onboarding_nfc_elapsed, elapsedSec),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(
+            text = context.getString(R.string.passport_onboarding_nfc_reading_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Start,
+        )
+    } else {
+        Text(
+            text = context.getString(R.string.passport_onboarding_nfc_instructions),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = context.getString(R.string.passport_onboarding_nfc_ready_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

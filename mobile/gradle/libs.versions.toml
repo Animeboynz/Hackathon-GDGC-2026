@@ -25,9 +25,8 @@ coil = "3.1.0"
 room = "2.6.1"
 spotless = "7.0.0"
 ktlint-core = "1.5.0"
-camerax = "1.4.1"
-mlkit-text = "16.0.1"
 jmrtd = "0.8.1"
+dynamsoft-mrz-scanner-bundle = "3.4.1200"
 # Align with JMRTD's scuba-smartcards; IsoDepCardService lives in this Android artifact
 scubaScAndroid = "0.0.20"
 
@@ -83,19 +82,14 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 jsoup = "org.jsoup:jsoup:1.18.3"
 ktlint-core = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint-core" }
 aboutLibraries-compose = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutlib_version" }
-androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
-androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
-androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
-androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
-mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-text" }
 jmrtd = { module = "org.jmrtd:jmrtd", version.ref = "jmrtd" }
+dynamsoft-mrz-scanner-bundle = { module = "com.dynamsoft:mrzscannerbundle", version.ref = "dynamsoft-mrz-scanner-bundle" }
 scuba-sc-android = { module = "net.sf.scuba:scuba-sc-android", version.ref = "scubaScAndroid" }
 
 [bundles]
 koin = ["koin-core", "koin-android", "koin-compose"]
 voyager = ["voyager-navigator", "voyager-transitions", "voyager-screenmodel", "voyager-tab"]
 coil = ["coil-core", "coil-compose", "coil-compose-core", "coil-network-okhttp"]
-camerax = ["androidx-camera-core", "androidx-camera-camera2", "androidx-camera-lifecycle", "androidx-camera-view"]
 serialization = ["serialization-json", "serialization-json-okio", "serialization-protobuf", "serialization-xml-core", "serialization-xml"]
 
 [plugins]

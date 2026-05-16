@@ -3,12 +3,13 @@ package com.animeboynz.kmd.ui.onboarding
 import android.nfc.Tag
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.animeboynz.kmd.passport.DynamsoftMrzMapper
 import com.animeboynz.kmd.passport.MrzParser
 import com.animeboynz.kmd.passport.PassportChipSummary
 import com.animeboynz.kmd.passport.PassportNfcReader
 import com.animeboynz.kmd.passport.Td3Mrz
 import com.animeboynz.kmd.preferences.GeneralPreferences
-import kotlinx.coroutines.Dispatchers
+import com.dynamsoft.mrzscannerbundle.ui.MRZScanResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,7 @@ class PassportOnboardingScreenModel(
 
         data class WaitNfc(
             val mrz: Td3Mrz,
+            val isReading: Boolean = false,
         ) : State()
 
         data class ChipRead(
@@ -83,10 +85,26 @@ class PassportOnboardingScreenModel(
         )
     }
 
-    fun onMrzDetectedFromCamera(mrz: Td3Mrz) {
-        screenModelScope.launch(Dispatchers.Main.immediate) {
-            if (_state.value is State.ScanPhoto) {
-                _state.value = State.ReviewMrz(mrz)
+    fun onDynamsoftMrzResult(result: MRZScanResult?) {
+        if (_state.value !is State.ScanPhoto) return
+        if (result == null) return
+        when (result.resultStatus) {
+            MRZScanResult.EnumResultStatus.RS_CANCELED -> return
+            MRZScanResult.EnumResultStatus.RS_EXCEPTION -> {
+                _state.value = State.ManualMrz(
+                    line1 = "",
+                    line2 = "",
+                    error = result.errorString.ifBlank { "MRZ scan failed" },
+                )
+            }
+            MRZScanResult.EnumResultStatus.RS_FINISHED -> {
+                val mrz = DynamsoftMrzMapper.passportTd3OrNull(result)
+                if (mrz != null) {
+                    _state.value = State.ReviewMrz(mrz)
+                } else {
+                    val err = DynamsoftMrzMapper.humanReadableFailure(result) ?: "Invalid MRZ"
+                    _state.value = State.ManualMrz(line1 = "", line2 = "", error = err)
+                }
             }
         }
     }
@@ -102,6 +120,8 @@ class PassportOnboardingScreenModel(
 
     fun onNfcTag(tag: Tag) {
         val s = _state.value as? State.WaitNfc ?: return
+        if (s.isReading) return
+        _state.value = s.copy(isReading = true)
         screenModelScope.launch {
             val result = PassportNfcReader.readDg1(tag, s.mrz)
             result.fold(

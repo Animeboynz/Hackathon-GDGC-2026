@@ -23,7 +23,7 @@
 # Keep custom tabs if they are being removed
 -keep class com.animeboynz.kmd.ui.home.tabs.** { *; }
 
-# JMRTD / BouncyCastle / SCUBA (passport NFC)
--keep class org.jmrtd.** { *; }
+# Dynamsoft MRZ Scanner (native .so)
+-keep class com.dynamsoft.** { *; }
 -keep class net.sf.scuba.** { *; }
 -keep class org.bouncycastle.** { *; }

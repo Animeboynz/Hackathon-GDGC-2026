@@ -29,7 +29,7 @@ object PassportNfcReader {
         )
         var passport: PassportService? = null
         try {
-            isoDep.timeout = 12_000
+            isoDep.timeout = 16_000
             val cardService = IsoDepCardService(isoDep)
             passport = PassportService(
                 cardService,

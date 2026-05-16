@@ -50,6 +50,12 @@ fun getGitSha(): String {
     return process.inputStream.bufferedReader().use { it.readText().trim() }
 }
 
+val dynamsoftLicenseKey: String = providers.gradleProperty("DYNAMSOFT_LICENSE_KEY")
+    .orElse("")
+    .get()
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "com.animeboynz.kmd"
     compileSdk = 35
@@ -62,6 +68,7 @@ android {
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "BUILD_TIME", "\"${getFormattedBuildTime()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
+        buildConfigField("String", "DYNAMSOFT_LICENSE_KEY", "\"${dynamsoftLicenseKey}\"")
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -119,6 +126,9 @@ android {
         resources {
             pickFirsts += "META-INF/versions/**"
         }
+        jniLibs {
+            keepDebugSymbols.add("**/*.so")
+        }
     }
 }
 
@@ -163,8 +173,7 @@ dependencies {
     implementation(libs.room.ktx)
     implementation(libs.aboutLibraries.compose)
     implementation(libs.zxing)
-    implementation(libs.bundles.camerax)
-    implementation(libs.mlkit.text.recognition)
+    implementation(libs.dynamsoft.mrz.scanner.bundle)
     implementation(libs.jmrtd)
     implementation(libs.scuba.sc.android)
     implementation(platform(libs.firebase.bom))
