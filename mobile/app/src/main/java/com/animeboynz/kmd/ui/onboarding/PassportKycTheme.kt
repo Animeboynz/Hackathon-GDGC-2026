@@ -9,31 +9,36 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** Design tokens aligned with `frontend/src/styles.css` (KYC / verification flow). */
+/** Design tokens aligned with the updated VerID frontend theme. */
 object PassportKycColors {
-    val background = Color(0xFFF0F2FF)
-    val primary = Color(0xFF4361EE)
-    val text = Color(0xFF1A1D26)
-    val muted = Color(0xFF6B7280)
-    val border = Color(0xFFE5E7EB)
-    val bannerBg = Color(0xFFEEF1FF)
-    val bannerBorder = Color(0xFFC7D2FE)
+    val background = Color(0xFFF3F0FA)
+    val page = Color(0xFFF2F4F8)
+    val primary = Color(0xFFAE0086)
+    val primaryHover = Color(0xFF920071)
+    val primaryBorder = Color(0xFF500040)
+    val lavender = Color(0xFFCAA5FF)
+    val lavender2 = Color(0xFFEDE9FE)
+    val text = Color(0xFF111827)
+    val muted = Color(0xFF374151)
+    val border = Color(0xFFCBD5E1)
+    val bannerBg = Color(0xFFF5DBE9)
+    val bannerBorder = Color(0xFFD946B8)
     val surface = Color.White
-    val nfcGradientTop = Color(0xFF0F1020)
-    val nfcGradientBottom = Color(0xFF1A1A2E)
-    val nfcSub = Color(0xFFA5B4FC)
+    val nfcGradientTop = Color(0xFF0F172A)
+    val nfcGradientBottom = Color(0xFF020617)
+    val nfcSub = Color(0xFFCBD5E1)
     val nfcListBg = Color(0x0FFFFFFF)
-    val nfcCheckDoneBg = Color(0x2634D399)
-    val nfcCheckDoneText = Color(0xFFA7F3D0)
-    val nfcListText = Color(0xFFC7D2FE)
-    val stepIconBg = Color(0xFFEEF1FF)
-    val stepDoneIconBg = Color(0xFFD1FAE5)
-    val pillApprovedBg = Color(0xFFD1FAE5)
-    val pillApprovedText = Color(0xFF047857)
-    val pillProgressBg = Color(0xFFDBEAFE)
+    val nfcCheckDoneBg = Color(0x88AE0086)
+    val nfcCheckDoneText = Color.White
+    val nfcListText = Color(0xFFE2E8F0)
+    val stepIconBg = Color(0xFFF5EEF9)
+    val stepDoneIconBg = Color(0xFFCAA5FF)
+    val pillApprovedBg = Color(0xFFF5DBE9)
+    val pillApprovedText = Color(0xFFAE0086)
+    val pillProgressBg = Color(0xFFEDE9FE)
     val pillProgressText = Color(0xFF4361EE)
-    val progressFaceStart = Color(0xFF312E81)
-    val progressFaceEnd = Color(0xFF4338CA)
+    val progressFaceStart = Color(0xFF1E293B)
+    val progressFaceEnd = Color(0xFF0F172A)
 }
 
 private val KycLightColorScheme = lightColorScheme(
@@ -41,7 +46,7 @@ private val KycLightColorScheme = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = PassportKycColors.bannerBg,
     onPrimaryContainer = PassportKycColors.primary,
-    secondary = Color(0xFF7C3AED),
+    secondary = PassportKycColors.lavender,
     onSecondary = Color.White,
     background = PassportKycColors.background,
     onBackground = PassportKycColors.text,

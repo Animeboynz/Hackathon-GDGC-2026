@@ -62,7 +62,7 @@ class MainActivity : BaseActivity() {
                 )
             }
 
-            val startScreen = if (generalPreferences.passportOnboardingCompleted.get()) {
+            val startScreen = if (generalPreferences.digitalIdGenerated.get()) {
                 HomeScreen
             } else {
                 PassportOnboardingScreen

@@ -26,7 +26,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
-import com.animeboynz.kmd.preferences.AppearancePreferences
+import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.animeboynz.kmd.presentation.Screen
 import com.animeboynz.kmd.presentation.util.Tab
 import com.animeboynz.kmd.ui.home.tabs.OrdersTab
@@ -45,7 +45,7 @@ object HomeScreen : Screen() {
 
     @Composable
     override fun Content() {
-        val preferences = koinInject<AppearancePreferences>()
+        val generalPreferences = koinInject<GeneralPreferences>()
 
         val tabs = buildList {
             add(OrdersTab)
@@ -54,8 +54,10 @@ object HomeScreen : Screen() {
         }
 
         val navigator = LocalNavigator.currentOrThrow
+        val startTab = if (generalPreferences.digitalIdGenerated.get()) MyId else tabs.first()
+
         TabNavigator(
-            tab = tabs.first(),
+            tab = startTab,
             key = TAB_NAVIGATOR_KEY,
         ) { tabNavigator ->
             CompositionLocalProvider(LocalNavigator provides navigator) {

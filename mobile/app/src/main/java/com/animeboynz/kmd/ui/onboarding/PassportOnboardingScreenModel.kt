@@ -43,6 +43,14 @@ class PassportOnboardingScreenModel(
             val summary: PassportChipSummary,
         ) : State()
 
+        data class SelfieCheck(
+            val summary: PassportChipSummary,
+        ) : State()
+
+        data class DigitalIdIssue(
+            val summary: PassportChipSummary,
+        ) : State()
+
         data class Fatal(
             val message: String,
         ) : State()
@@ -125,7 +133,7 @@ class PassportOnboardingScreenModel(
         screenModelScope.launch {
             val result = PassportNfcReader.readDg1(tag, s.mrz)
             result.fold(
-                onSuccess = { summary -> _state.value = State.ChipRead(summary) },
+                onSuccess = { summary -> _state.value = State.SelfieCheck(summary) },
                 onFailure = { e ->
                     _state.value = State.Fatal(e.message ?: "NFC read failed")
                 },
@@ -142,6 +150,36 @@ class PassportOnboardingScreenModel(
     fun cancelWaitNfc() {
         val s = _state.value as? State.WaitNfc ?: return
         _state.value = State.ReviewMrz(s.mrz)
+    }
+
+    fun beginSelfieCheck(summary: PassportChipSummary) {
+        _state.value = State.SelfieCheck(summary)
+    }
+
+    fun backToPassportSummary(summary: PassportChipSummary) {
+        _state.value = State.ChipRead(summary)
+    }
+
+    fun confirmSelfieMatch(summary: PassportChipSummary) {
+        _state.value = State.DigitalIdIssue(summary)
+    }
+
+    fun completeDigitalId(summary: PassportChipSummary) {
+        val mrz = summary.mrzInfo
+        val holderName = listOf(mrz.primaryIdentifier, mrz.secondaryIdentifier)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .ifBlank { mrz.nameOfHolder }
+            .ifBlank { "N.Z. Traveller" }
+        val documentNumber = mrz.documentNumber.ifBlank { "UNKNOWN" }
+        val credentialId = "EID-${documentNumber.takeLast(4).padStart(4, '0')}"
+
+        generalPreferences.digitalIdHolderName.set(holderName)
+        generalPreferences.digitalIdDocumentNumber.set(documentNumber)
+        generalPreferences.digitalIdExpiry.set(mrz.dateOfExpiry.ifBlank { "2030-01-01" })
+        generalPreferences.digitalIdCredentialId.set(credentialId)
+        generalPreferences.digitalIdGenerated.set(true)
+        generalPreferences.passportOnboardingCompleted.set(true)
     }
 
     fun markOnboardingComplete() {

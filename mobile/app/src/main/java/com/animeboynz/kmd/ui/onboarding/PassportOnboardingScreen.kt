@@ -2,6 +2,7 @@ package com.animeboynz.kmd.ui.onboarding
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
@@ -159,6 +160,8 @@ object PassportOnboardingScreen : Screen() {
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        VerificationProgress(state)
+
                         when (val s = state) {
                             is PassportOnboardingScreenModel.State.Welcome -> WelcomeStep(
                                 onStart = { screenModel.goToScan() },
@@ -190,8 +193,19 @@ object PassportOnboardingScreen : Screen() {
 
                             is PassportOnboardingScreenModel.State.ChipRead -> ChipResultStep(
                                 summary = s.summary,
-                                onContinue = {
-                                    screenModel.markOnboardingComplete()
+                                onContinue = { screenModel.beginSelfieCheck(s.summary) },
+                            )
+
+                            is PassportOnboardingScreenModel.State.SelfieCheck -> SelfieCheckStep(
+                                summary = s.summary,
+                                onBack = { screenModel.backToPassportSummary(s.summary) },
+                                onFaceMatch = { screenModel.confirmSelfieMatch(s.summary) },
+                            )
+
+                            is PassportOnboardingScreenModel.State.DigitalIdIssue -> DigitalIdIssueStep(
+                                summary = s.summary,
+                                onDone = {
+                                    screenModel.completeDigitalId(s.summary)
                                     navigator.replaceAll(HomeScreen)
                                 },
                             )
@@ -216,6 +230,39 @@ object PassportOnboardingScreen : Screen() {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun VerificationProgress(state: PassportOnboardingScreenModel.State) {
+    val progress = when (state) {
+        PassportOnboardingScreenModel.State.Welcome -> 0.16f
+        PassportOnboardingScreenModel.State.ScanPhoto -> 0.3f
+        is PassportOnboardingScreenModel.State.ReviewMrz -> 0.38f
+        is PassportOnboardingScreenModel.State.ManualMrz -> 0.3f
+        is PassportOnboardingScreenModel.State.WaitNfc -> 0.44f
+        is PassportOnboardingScreenModel.State.ChipRead -> 0.52f
+        is PassportOnboardingScreenModel.State.SelfieCheck -> 0.72f
+        is PassportOnboardingScreenModel.State.DigitalIdIssue -> 0.9f
+        is PassportOnboardingScreenModel.State.Fatal -> 0.44f
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 48.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xFFE2E8F0))
+            .border(1.dp, Color(0xFF94A3B8).copy(alpha = 0.67f), RoundedCornerShape(999.dp)),
+    ) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp),
+            color = PassportKycColors.primary,
+            trackColor = Color.Transparent,
+        )
     }
 }
 
@@ -245,6 +292,7 @@ private fun KycPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifi
             containerColor = MaterialTheme.colorScheme.primary,
             disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
         ),
+        border = BorderStroke(2.dp, PassportKycColors.primaryBorder),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
     ) {
         Text(text = text, style = MaterialTheme.typography.titleMedium, fontSize = 16.sp)
@@ -259,8 +307,8 @@ private fun KycSecondaryButton(text: String, onClick: () -> Unit, modifier: Modi
             .fillMaxWidth()
             .height(TapMin),
         shape = RoundedCornerShape(KycRadius),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+        border = BorderStroke(2.dp, PassportKycColors.muted),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = PassportKycColors.text),
     ) {
         Text(text = text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     }
@@ -791,6 +839,209 @@ private fun ChipResultStep(
     }
 
     KycPrimaryButton(text = context.getString(R.string.passport_onboarding_enter_app), onClick = onContinue)
+}
+
+@Composable
+private fun SelfieCheckStep(
+    summary: PassportChipSummary,
+    onBack: () -> Unit,
+    onFaceMatch: () -> Unit,
+) {
+    val context = LocalContext.current
+    val holderName = summary.mrzInfo.nameOfHolder.ifBlank {
+        listOf(summary.mrzInfo.primaryIdentifier, summary.mrzInfo.secondaryIdentifier)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }.ifBlank { context.getString(R.string.passport_onboarding_selfie_default_holder) }
+
+    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = context.getString(R.string.passport_onboarding_back),
+            color = PassportKycColors.muted,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+    Text(
+        text = context.getString(R.string.passport_onboarding_selfie_title),
+        style = MaterialTheme.typography.headlineLarge,
+        color = PassportKycColors.text,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = context.getString(R.string.passport_onboarding_selfie_body),
+        style = MaterialTheme.typography.bodyMedium,
+        color = PassportKycColors.muted,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    SelfieScanVisual(modifier = Modifier.padding(top = 14.dp))
+
+    KycElevatedCard {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = context.getString(R.string.passport_onboarding_selfie_compare_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            MatchRow(
+                label = context.getString(R.string.passport_onboarding_selfie_compare_passport),
+                value = holderName,
+                done = true,
+            )
+            MatchRow(
+                label = context.getString(R.string.passport_onboarding_selfie_compare_face),
+                value = context.getString(R.string.passport_onboarding_selfie_confidence),
+                done = true,
+            )
+        }
+    }
+
+    KycPrimaryButton(
+        text = context.getString(R.string.passport_onboarding_selfie_confirm),
+        onClick = onFaceMatch,
+    )
+}
+
+@Composable
+private fun SelfieScanVisual(modifier: Modifier = Modifier) {
+    val infinite = rememberInfiniteTransition(label = "selfieScan")
+    val rotation by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "selfieScanRotation",
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(250.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(224.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .border(3.dp, PassportKycColors.primary, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("◉", fontSize = 68.sp, color = PassportKycColors.primary)
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { rotationZ = rotation }
+                    .border(2.dp, PassportKycColors.primaryHover, CircleShape),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MatchRow(label: String, value: String, done: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.labelMedium, color = PassportKycColors.muted)
+            Text(text = value, style = MaterialTheme.typography.bodyMedium, color = PassportKycColors.text)
+        }
+        Text(
+            text = if (done) "✓" else "○",
+            color = if (done) PassportKycColors.primary else PassportKycColors.muted,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+        )
+    }
+}
+
+@Composable
+private fun DigitalIdIssueStep(
+    summary: PassportChipSummary,
+    onDone: () -> Unit,
+) {
+    val context = LocalContext.current
+    val documentNumber = summary.mrzInfo.documentNumber.ifBlank { "UNKNOWN" }
+    val credentialId = "EID-${documentNumber.takeLast(4).padStart(4, '0')}"
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(PassportKycColors.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 52.sp)
+        }
+        Text(
+            text = context.getString(R.string.passport_onboarding_id_ready_title),
+            modifier = Modifier.padding(top = 22.dp),
+            style = MaterialTheme.typography.headlineLarge,
+            color = PassportKycColors.text,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = context.getString(R.string.passport_onboarding_id_ready_body),
+            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = PassportKycColors.muted,
+            textAlign = TextAlign.Center,
+        )
+    }
+
+    KycElevatedCard {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                text = context.getString(R.string.passport_onboarding_id_credential_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = PassportKycColors.muted,
+                letterSpacing = 1.1.sp,
+            )
+            Text(
+                text = context.getString(R.string.passport_onboarding_id_credential_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontSize = 22.sp,
+                color = PassportKycColors.text,
+            )
+            Text(
+                text = context.getString(R.string.passport_onboarding_id_credential_meta, credentialId),
+                style = MaterialTheme.typography.bodyMedium,
+                color = PassportKycColors.muted,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(PassportKycColors.bannerBg)
+                    .border(2.dp, PassportKycColors.bannerBorder, RoundedCornerShape(18.dp))
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = context.getString(R.string.passport_onboarding_id_qr_label),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PassportKycColors.text,
+                )
+                Text("▣", fontSize = 42.sp, color = PassportKycColors.text)
+            }
+        }
+    }
+
+    KycPrimaryButton(
+        text = context.getString(R.string.passport_onboarding_open_id),
+        onClick = onDone,
+    )
 }
 
 @Composable
