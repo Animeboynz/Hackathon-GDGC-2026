@@ -175,9 +175,17 @@
 
     // Passport onboarding
     <string name="passport_onboarding_title">Verify identity</string>
+    <string name="passport_onboarding_welcome_subtitle">Next, we\'ll read your passport MRZ, then verify the secure NFC chip matches — same flow as our web demo.</string>
+    <string name="passport_onboarding_bullet_chip">Use a passport with the chip symbol on the cover</string>
+    <string name="passport_onboarding_bullet_remove">Remove thick covers, stickers, or metal objects</string>
+    <string name="passport_onboarding_bullet_hold">Hold your phone flat against the passport — try the back cover first</string>
+    <string name="passport_onboarding_footer">Powered by VerID</string>
+    <string name="passport_onboarding_nfc_back">Back to review</string>
     <string name="passport_onboarding_intro">We will read the machine-readable zone (MRZ) from your passport photo page, then use it to unlock the passport chip over NFC and show the data stored on the chip.</string>
     <string name="passport_onboarding_scan_photo">Scan photo page</string>
     <string name="passport_onboarding_enter_mrz_manual">Enter MRZ manually</string>
+    <string name="passport_onboarding_scan_title">Scan the MRZ</string>
+    <string name="passport_onboarding_scan_subtitle">Open the camera scanner and align the two-line MRZ at the bottom of the photo page. A TD3 (passport) MRZ is required for chip unlock.</string>
     <string name="passport_onboarding_scan_instructions">Tap the button to open the MRZ camera. Hold your passport steady until the scanner finishes. You need a passport (TD3) for chip unlock.</string>
     <string name="passport_onboarding_open_mrz_scanner">Scan MRZ</string>
     <string name="passport_onboarding_dynamsoft_license_hint">Set DYNAMSOFT_LICENSE_KEY in gradle.properties (see BuildConfig) and sync Gradle.</string>
@@ -189,6 +197,11 @@
     <string name="passport_onboarding_mrz_line2">MRZ line 2</string>
     <string name="passport_onboarding_validate_mrz">Validate MRZ</string>
     <string name="passport_onboarding_back_scan">Back to MRZ scan</string>
+    <string name="passport_onboarding_nfc_title">Hold your phone to your passport</string>
+    <string name="passport_onboarding_nfc_subtitle">Align the top edge of your phone with the passport cover near the chip symbol. Keep steady until the read finishes.</string>
+    <string name="passport_onboarding_nfc_check_detected">Chip detected</string>
+    <string name="passport_onboarding_nfc_check_reading">Reading passport data</string>
+    <string name="passport_onboarding_nfc_check_securing">Securing session</string>
     <string name="passport_onboarding_nfc_instructions">Rest the closed passport on the back of the phone over the NFC area (often upper/center, varies by model), then hold it still.</string>
     <string name="passport_onboarding_nfc_ready_hint">When you hear a sound or feel a buzz, stay still — the read will start automatically.</string>
     <string name="passport_onboarding_nfc_reading_title">Reading the chip</string>
@@ -196,6 +209,16 @@
     <string name="passport_onboarding_nfc_reading_progress_hint">Unlocking the chip and reading data…</string>
     <string name="passport_onboarding_nfc_elapsed">Elapsed: %1$d s · usually 5–20 s</string>
     <string name="passport_onboarding_nfc_reading_note">If nothing happens after ~25 s, lift and re-seat the passport on the NFC spot, or try again from the error screen.</string>
+    <string name="passport_onboarding_overview_head">Your passport was read</string>
+    <string name="passport_onboarding_overview_sub">NFC data from your e-passport chip</string>
+    <string name="passport_onboarding_step_chip_title">Passport chip read</string>
+    <string name="passport_onboarding_step_chip_meta">Data received from NFC</string>
+    <string name="passport_onboarding_step_checks_title">Passport checks</string>
+    <string name="passport_onboarding_step_checks_meta">Chip data validated</string>
+    <string name="passport_onboarding_status_passport_label">Passport</string>
+    <string name="passport_onboarding_status_nfc_label">NFC chip</string>
+    <string name="passport_onboarding_status_approved">Approved</string>
+    <string name="passport_onboarding_status_verified">Verified</string>
     <string name="passport_onboarding_chip_success">Chip data (DG1)</string>
     <string name="passport_onboarding_chip_portrait">Portrait from chip (DG2)</string>
     <string name="passport_onboarding_raw_dg1">Raw MRZ from chip</string>

@@ -138,6 +138,12 @@ class PassportOnboardingScreenModel(
         _state.value = State.WaitNfc(mrz)
     }
 
+    /** Return to MRZ review from the NFC wait screen (e.g. user needs to adjust positioning). */
+    fun cancelWaitNfc() {
+        val s = _state.value as? State.WaitNfc ?: return
+        _state.value = State.ReviewMrz(s.mrz)
+    }
+
     fun markOnboardingComplete() {
         generalPreferences.passportOnboardingCompleted.set(true)
     }

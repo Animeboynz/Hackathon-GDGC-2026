@@ -1,17 +1,50 @@
 package com.animeboynz.kmd.ui.onboarding
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,29 +53,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import kotlinx.coroutines.delay
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -57,8 +81,12 @@ import com.animeboynz.kmd.ui.home.HomeScreen
 import com.dynamsoft.mrzscannerbundle.ui.MRZScanResult
 import com.dynamsoft.mrzscannerbundle.ui.MRZScannerActivity
 import com.dynamsoft.mrzscannerbundle.ui.MRZScannerConfig
+import kotlinx.coroutines.delay
 import org.jmrtd.lds.icao.MRZInfo
 import org.koin.compose.koinInject
+
+private val KycRadius = 16.dp
+private val TapMin = 52.dp
 
 object PassportOnboardingScreen : Screen() {
     private fun readResolve(): Any = PassportOnboardingScreen
@@ -86,65 +114,155 @@ object PassportOnboardingScreen : Screen() {
             }
         }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(text = context.getString(R.string.passport_onboarding_title)) },
-                )
-            },
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                when (val s = state) {
-                    is PassportOnboardingScreenModel.State.Welcome -> WelcomeStep(
-                        onStart = { screenModel.goToScan() },
-                        onManual = { screenModel.openManualEntry() },
-                    )
+        PassportKycTheme {
+            val isNfcWait = state is PassportOnboardingScreenModel.State.WaitNfc
 
-                    is PassportOnboardingScreenModel.State.ScanPhoto -> PassportDynamsoftScanStep(
-                        onScanResult = { screenModel.onDynamsoftMrzResult(it) },
-                        onManualInstead = { screenModel.openManualEntry() },
+            Scaffold(
+                containerColor = if (isNfcWait) {
+                    PassportKycColors.nfcGradientBottom
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
+                topBar = {
+                    if (!isNfcWait) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = context.getString(R.string.passport_onboarding_title),
+                                    style = MaterialTheme.typography.titleLarge,
+                                )
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.background,
+                                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                            ),
+                        )
+                    }
+                },
+            ) { padding ->
+                if (isNfcWait) {
+                    val s = state as PassportOnboardingScreenModel.State.WaitNfc
+                    WaitNfcStep(
+                        isReading = s.isReading,
+                        onBack = { screenModel.cancelWaitNfc() },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding),
                     )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 4.dp, bottom = 24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        when (val s = state) {
+                            is PassportOnboardingScreenModel.State.Welcome -> WelcomeStep(
+                                onStart = { screenModel.goToScan() },
+                                onManual = { screenModel.openManualEntry() },
+                            )
 
-                    is PassportOnboardingScreenModel.State.ReviewMrz -> ReviewMrzStep(
-                        mrz = s.mrz,
-                        onConfirm = { screenModel.confirmMrzForNfc(s.mrz) },
-                        onEdit = { screenModel.editMrzAgain(s.mrz) },
-                    )
+                            is PassportOnboardingScreenModel.State.ScanPhoto -> PassportDynamsoftScanStep(
+                                onScanResult = { screenModel.onDynamsoftMrzResult(it) },
+                                onManualInstead = { screenModel.openManualEntry() },
+                            )
 
-                    is PassportOnboardingScreenModel.State.ManualMrz -> ManualMrzStep(
-                        line1 = s.line1,
-                        line2 = s.line2,
-                        error = s.error,
-                        onLine1 = screenModel::updateManualLine1,
-                        onLine2 = screenModel::updateManualLine2,
-                        onSubmit = { screenModel.submitManualMrz() },
-                        onBack = { screenModel.goToScan() },
-                    )
+                            is PassportOnboardingScreenModel.State.ReviewMrz -> ReviewMrzStep(
+                                mrz = s.mrz,
+                                onConfirm = { screenModel.confirmMrzForNfc(s.mrz) },
+                                onEdit = { screenModel.editMrzAgain(s.mrz) },
+                            )
 
-                    is PassportOnboardingScreenModel.State.WaitNfc -> WaitNfcStep(isReading = s.isReading)
+                            is PassportOnboardingScreenModel.State.ManualMrz -> ManualMrzStep(
+                                line1 = s.line1,
+                                line2 = s.line2,
+                                error = s.error,
+                                onLine1 = screenModel::updateManualLine1,
+                                onLine2 = screenModel::updateManualLine2,
+                                onSubmit = { screenModel.submitManualMrz() },
+                                onBack = { screenModel.goToScan() },
+                            )
 
-                    is PassportOnboardingScreenModel.State.ChipRead -> ChipResultStep(
-                        summary = s.summary,
-                        onContinue = {
-                            screenModel.markOnboardingComplete()
-                            navigator.replaceAll(HomeScreen)
-                        },
-                    )
+                            is PassportOnboardingScreenModel.State.WaitNfc -> Unit
 
-                    is PassportOnboardingScreenModel.State.Fatal -> FatalNfcStep(
-                        message = s.message,
-                        onRetry = { screenModel.retryNfcAfterError() },
-                    )
+                            is PassportOnboardingScreenModel.State.ChipRead -> ChipResultStep(
+                                summary = s.summary,
+                                onContinue = {
+                                    screenModel.markOnboardingComplete()
+                                    navigator.replaceAll(HomeScreen)
+                                },
+                            )
+
+                            is PassportOnboardingScreenModel.State.Fatal -> FatalNfcStep(
+                                message = s.message,
+                                onRetry = { screenModel.retryNfcAfterError() },
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = context.getString(R.string.passport_onboarding_footer),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun KycElevatedCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(KycRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun KycPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(TapMin),
+        shape = RoundedCornerShape(KycRadius),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+        ),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+    ) {
+        Text(text = text, style = MaterialTheme.typography.titleMedium, fontSize = 16.sp)
+    }
+}
+
+@Composable
+private fun KycSecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(TapMin),
+        shape = RoundedCornerShape(KycRadius),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+    ) {
+        Text(text = text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     }
 }
 
@@ -155,15 +273,65 @@ private fun WelcomeStep(
 ) {
     val context = LocalContext.current
     Text(
-        text = context.getString(R.string.passport_onboarding_intro),
-        style = MaterialTheme.typography.bodyLarge,
+        text = context.getString(R.string.passport_onboarding_welcome_subtitle),
+        style = MaterialTheme.typography.titleMedium,
+        fontSize = 17.5.sp,
+        lineHeight = 24.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Spacer(modifier = Modifier.height(8.dp))
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_scan_photo))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PassportKycColors.bannerBg)
+            .border(1.dp, PassportKycColors.bannerBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = context.getString(R.string.passport_onboarding_intro),
+            style = MaterialTheme.typography.bodySmall,
+            color = PassportKycColors.primary,
+            lineHeight = 20.sp,
+        )
     }
+
+    KycElevatedCard {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("📱", fontSize = 30.sp)
+                Text("📘", fontSize = 24.sp, modifier = Modifier.padding(start = 4.dp))
+            }
+            BulletLine(context.getString(R.string.passport_onboarding_bullet_chip))
+            BulletLine(context.getString(R.string.passport_onboarding_bullet_remove))
+            BulletLine(context.getString(R.string.passport_onboarding_bullet_hold))
+        }
+    }
+
+    KycPrimaryButton(text = context.getString(R.string.passport_onboarding_scan_photo), onClick = onStart)
     TextButton(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_enter_mrz_manual))
+        Text(
+            text = context.getString(R.string.passport_onboarding_enter_mrz_manual),
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun BulletLine(text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("•", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 20.sp,
+        )
     }
 }
 
@@ -185,16 +353,20 @@ private fun PassportDynamsoftScanStep(
     )
 
     Text(
-        text = context.getString(R.string.passport_onboarding_scan_instructions),
-        style = MaterialTheme.typography.bodyLarge,
+        text = context.getString(R.string.passport_onboarding_scan_title),
+        style = MaterialTheme.typography.headlineLarge,
     )
-    Button(
+    Text(
+        text = context.getString(R.string.passport_onboarding_scan_subtitle),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    KycPrimaryButton(
+        text = context.getString(R.string.passport_onboarding_open_mrz_scanner),
         onClick = { launcher.launch(scannerConfig) },
         enabled = BuildConfig.DYNAMSOFT_LICENSE_KEY.isNotBlank(),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(context.getString(R.string.passport_onboarding_open_mrz_scanner))
-    }
+    )
     if (BuildConfig.DYNAMSOFT_LICENSE_KEY.isBlank()) {
         Text(
             text = context.getString(R.string.passport_onboarding_dynamsoft_license_hint),
@@ -202,9 +374,10 @@ private fun PassportDynamsoftScanStep(
             style = MaterialTheme.typography.bodySmall,
         )
     }
-    TextButton(onClick = onManualInstead, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_enter_mrz_manual))
-    }
+    KycSecondaryButton(
+        text = context.getString(R.string.passport_onboarding_enter_mrz_manual),
+        onClick = onManualInstead,
+    )
 }
 
 @Composable
@@ -214,18 +387,26 @@ private fun ReviewMrzStep(
     onEdit: () -> Unit,
 ) {
     val context = LocalContext.current
-    Text(text = context.getString(R.string.passport_onboarding_mrz_review))
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = mrz.line1, fontFamily = FontFamily.Monospace)
-            Text(text = mrz.line2, fontFamily = FontFamily.Monospace)
+    Text(
+        text = context.getString(R.string.passport_onboarding_mrz_review),
+        style = MaterialTheme.typography.headlineLarge,
+        fontSize = 20.sp,
+    )
+    KycElevatedCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(text = mrz.line1, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            Text(text = mrz.line2, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
         }
     }
-    Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_continue_nfc))
-    }
-    TextButton(onClick = onEdit) {
-        Text(context.getString(R.string.passport_onboarding_edit_mrz))
+    KycPrimaryButton(text = context.getString(R.string.passport_onboarding_continue_nfc), onClick = onConfirm)
+    TextButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
+        Text(context.getString(R.string.passport_onboarding_edit_mrz), fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -240,14 +421,26 @@ private fun ManualMrzStep(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    Text(text = context.getString(R.string.passport_onboarding_manual_hint))
-    error?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = Color(0xFFFAFBFF),
+        unfocusedContainerColor = Color(0xFFFAFBFF),
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    )
+    Text(
+        text = context.getString(R.string.passport_onboarding_manual_hint),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    error?.let { Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
     OutlinedTextField(
         value = line1,
         onValueChange = onLine1,
         modifier = Modifier.fillMaxWidth(),
         label = { Text(context.getString(R.string.passport_onboarding_mrz_line1)) },
         singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        colors = fieldColors,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
     )
     OutlinedTextField(
@@ -256,20 +449,80 @@ private fun ManualMrzStep(
         modifier = Modifier.fillMaxWidth(),
         label = { Text(context.getString(R.string.passport_onboarding_mrz_line2)) },
         singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        colors = fieldColors,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
     )
-    Button(onClick = onSubmit, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_validate_mrz))
-    }
-    TextButton(onClick = onBack) {
-        Text(context.getString(R.string.passport_onboarding_back_scan))
+    KycPrimaryButton(text = context.getString(R.string.passport_onboarding_validate_mrz), onClick = onSubmit)
+    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+        Text(context.getString(R.string.passport_onboarding_back_scan), fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun WaitNfcStep(isReading: Boolean) {
+private fun NfcScanStage(modifier: Modifier = Modifier) {
+    val infinite = rememberInfiniteTransition(label = "nfcHero")
+    Box(
+        modifier = modifier.size(200.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        val ringSizes = listOf(48.dp, 72.dp, 96.dp)
+        ringSizes.forEachIndexed { index, size ->
+            val delayMs = index * 250
+            val progress by infinite.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2200, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Restart,
+                    initialStartOffset = StartOffset(delayMs),
+                ),
+                label = "ring$index",
+            )
+            val alpha = (1f - progress) * 0.75f
+            val scale = 0.9f + progress * 0.28f
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        this.alpha = alpha
+                    }
+                    .border(
+                        width = 2.dp,
+                        color = Color(0x594361EE),
+                        shape = CircleShape,
+                    ),
+            )
+        }
+        Text(text = "📘", fontSize = 56.sp)
+    }
+}
+
+@Composable
+private fun WaitNfcStep(
+    isReading: Boolean,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
+    var nfcPhase by remember { mutableIntStateOf(0) }
     var elapsedSec by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(isReading) {
+        if (!isReading) {
+            nfcPhase = 0
+            elapsedSec = 0
+            return@LaunchedEffect
+        }
+        nfcPhase = 1
+        delay(900)
+        nfcPhase = 2
+        delay(850)
+        nfcPhase = 3
+    }
+
     LaunchedEffect(isReading) {
         if (!isReading) {
             elapsedSec = 0
@@ -282,54 +535,142 @@ private fun WaitNfcStep(isReading: Boolean) {
         }
     }
 
-    if (isReading) {
-        Text(
-            text = context.getString(R.string.passport_onboarding_nfc_reading_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = context.getString(R.string.passport_onboarding_nfc_reading_body),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        Row(
+    Box(
+        modifier = modifier
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(PassportKycColors.nfcGradientTop, PassportKycColors.nfcGradientBottom),
+                ),
+            ),
+    ) {
+        IconButton(
+            onClick = onBack,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .align(Alignment.TopEnd)
+                .padding(4.dp),
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(48.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Text("✕", color = Color(0xFFF4F4F5), fontSize = 18.sp)
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = 16.dp, bottom = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(modifier = Modifier.height(32.dp))
+            NfcScanStage()
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = context.getString(R.string.passport_onboarding_nfc_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.2.sp, color = Color(0xFFF4F4F5)),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+            Text(
+                text = context.getString(R.string.passport_onboarding_nfc_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = PassportKycColors.nfcSub,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, start = 8.dp, end = 8.dp),
+                lineHeight = 22.sp,
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            NfcChecklistItem(
+                label = context.getString(R.string.passport_onboarding_nfc_check_detected),
+                done = isReading && nfcPhase >= 1,
+            )
+            NfcChecklistItem(
+                label = context.getString(R.string.passport_onboarding_nfc_check_reading),
+                done = isReading && nfcPhase >= 2,
+            )
+            NfcChecklistItem(
+                label = context.getString(R.string.passport_onboarding_nfc_check_securing),
+                done = isReading && nfcPhase >= 3,
+            )
+
+            if (isReading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = PassportKycColors.nfcSub,
+                    trackColor = Color.White.copy(alpha = 0.15f),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        color = PassportKycColors.nfcSub,
+                        strokeWidth = 3.dp,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = context.getString(R.string.passport_onboarding_nfc_reading_progress_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFE0E7FF),
+                        )
+                        Text(
+                            text = context.getString(R.string.passport_onboarding_nfc_elapsed, elapsedSec),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PassportKycColors.nfcSub,
+                        )
+                    }
+                }
                 Text(
-                    text = context.getString(R.string.passport_onboarding_nfc_reading_progress_hint),
+                    text = context.getString(R.string.passport_onboarding_nfc_reading_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PassportKycColors.nfcSub.copy(alpha = 0.85f),
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = context.getString(R.string.passport_onboarding_nfc_instructions),
                     style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFE0E7FF),
+                    textAlign = TextAlign.Center,
                 )
                 Text(
-                    text = context.getString(R.string.passport_onboarding_nfc_elapsed, elapsedSec),
+                    text = context.getString(R.string.passport_onboarding_nfc_ready_hint),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = PassportKycColors.nfcSub,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp),
                 )
             }
         }
-        Text(
-            text = context.getString(R.string.passport_onboarding_nfc_reading_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Start,
-        )
-    } else {
-        Text(
-            text = context.getString(R.string.passport_onboarding_nfc_instructions),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = context.getString(R.string.passport_onboarding_nfc_ready_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    }
+}
+
+@Composable
+private fun NfcChecklistItem(label: String, done: Boolean) {
+    val bg = if (done) PassportKycColors.nfcCheckDoneBg else PassportKycColors.nfcListBg
+    val fg = if (done) PassportKycColors.nfcCheckDoneText else PassportKycColors.nfcListText
+    val prefix = if (done) "✓" else "○"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(prefix, color = fg, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = fg)
     }
 }
 
@@ -344,26 +685,89 @@ private fun ChipResultStep(
         .filter { it.isNotBlank() }
         .joinToString(" ")
         .ifBlank { m.nameOfHolder }
-    Text(
-        text = context.getString(R.string.passport_onboarding_chip_success),
-        style = MaterialTheme.typography.titleMedium,
-    )
+
+    KycElevatedCard {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = context.getString(R.string.passport_onboarding_overview_head),
+                style = MaterialTheme.typography.titleMedium,
+                fontSize = 18.4.sp,
+            )
+            Text(
+                text = context.getString(R.string.passport_onboarding_overview_sub),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+            )
+            OverviewStepRow(emoji = "📘", title = context.getString(R.string.passport_onboarding_step_chip_title), subtitle = context.getString(R.string.passport_onboarding_step_chip_meta), done = true)
+            OverviewStepRow(emoji = "✓", title = context.getString(R.string.passport_onboarding_step_checks_title), subtitle = context.getString(R.string.passport_onboarding_step_checks_meta), done = true, withDivider = true)
+        }
+    }
+
+    KycElevatedCard {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(PassportKycColors.progressFaceStart, PassportKycColors.progressFaceEnd),
+                        ),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("📘", fontSize = 26.sp)
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatusPillRow(
+                    label = context.getString(R.string.passport_onboarding_status_passport_label),
+                    pillText = context.getString(R.string.passport_onboarding_status_approved),
+                    approved = true,
+                )
+                StatusPillRow(
+                    label = context.getString(R.string.passport_onboarding_status_nfc_label),
+                    pillText = context.getString(R.string.passport_onboarding_status_verified),
+                    approved = true,
+                )
+            }
+        }
+    }
+
     summary.portrait?.let { bmp ->
         Text(
             text = context.getString(R.string.passport_onboarding_chip_portrait),
             style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(top = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Image(
-            bitmap = bmp.asImageBitmap(),
-            contentDescription = context.getString(R.string.passport_onboarding_chip_portrait),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp),
-        )
+        Card(
+            shape = RoundedCornerShape(KycRadius),
+            elevation = CardDefaults.cardElevation(3.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        ) {
+            Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = context.getString(R.string.passport_onboarding_chip_portrait),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+            )
+        }
     }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+
+    KycElevatedCard {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = context.getString(R.string.passport_onboarding_chip_success),
+                style = MaterialTheme.typography.titleMedium,
+            )
             KeyValueRow(context.getString(R.string.passport_field_names), displayName)
             KeyValueRow(context.getString(R.string.passport_field_doc_number), m.documentNumber)
             KeyValueRow(context.getString(R.string.passport_field_nationality), m.nationality)
@@ -372,16 +776,74 @@ private fun ChipResultStep(
             KeyValueRow(context.getString(R.string.passport_field_gender), m.gender.toString())
             KeyValueRow(context.getString(R.string.passport_field_issuer), m.issuingState)
             KeyValueRow(context.getString(R.string.passport_field_doc_type), m.documentCode)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = context.getString(R.string.passport_onboarding_raw_dg1),
                 style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(text = summary.rawMrzDisplay, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = summary.rawMrzDisplay,
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
-    Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_enter_app))
+
+    KycPrimaryButton(text = context.getString(R.string.passport_onboarding_enter_app), onClick = onContinue)
+}
+
+@Composable
+private fun OverviewStepRow(
+    emoji: String,
+    title: String,
+    subtitle: String,
+    done: Boolean,
+    withDivider: Boolean = false,
+) {
+    if (withDivider) {
+        Spacer(modifier = Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (done) PassportKycColors.stepDoneIconBg else PassportKycColors.stepIconBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(emoji, fontSize = 20.sp)
+        }
+        Column {
+            Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge, fontSize = 15.2.sp)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun StatusPillRow(label: String, pillText: String, approved: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        val bg = if (approved) PassportKycColors.pillApprovedBg else PassportKycColors.pillProgressBg
+        val fg = if (approved) PassportKycColors.pillApprovedText else PassportKycColors.pillProgressText
+        Text(
+            text = pillText.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = 11.sp,
+            letterSpacing = 0.4.sp,
+            color = fg,
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(bg)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        )
     }
 }
 
@@ -399,9 +861,17 @@ private fun FatalNfcStep(
     onRetry: () -> Unit,
 ) {
     val context = LocalContext.current
-    Text(text = context.getString(R.string.passport_onboarding_nfc_failed), style = MaterialTheme.typography.titleMedium)
-    Text(text = message, color = MaterialTheme.colorScheme.error)
-    Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
-        Text(context.getString(R.string.passport_onboarding_try_nfc_again))
+    KycElevatedCard {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = context.getString(R.string.passport_onboarding_nfc_failed),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(text = message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        }
     }
+    KycPrimaryButton(text = context.getString(R.string.passport_onboarding_try_nfc_again), onClick = onRetry)
 }
