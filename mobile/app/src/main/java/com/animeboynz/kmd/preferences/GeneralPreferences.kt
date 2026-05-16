@@ -13,6 +13,7 @@ class GeneralPreferences(preferenceStore: PreferenceStore) {
     val productsListImported = preferenceStore.getBoolean("products_list_imported", false)
     val passportOnboardingCompleted = preferenceStore.getBoolean("passport_onboarding_completed", false)
     val digitalIdGenerated = preferenceStore.getBoolean("digital_id_generated", false)
+    val digitalIdNumericId = preferenceStore.getLong("digital_id_numeric_id", 0L)
     val digitalIdHolderName = preferenceStore.getString("digital_id_holder_name", "N.Z. Traveller")
     val digitalIdDocumentNumber = preferenceStore.getString("digital_id_document_number", "EID-4729")
     val digitalIdDateOfBirth = preferenceStore.getString("digital_id_date_of_birth", "Unknown")

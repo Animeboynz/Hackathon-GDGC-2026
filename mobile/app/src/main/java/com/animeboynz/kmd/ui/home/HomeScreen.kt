@@ -32,6 +32,7 @@ import com.animeboynz.kmd.presentation.util.Tab
 import com.animeboynz.kmd.ui.home.tabs.OrdersTab
 import com.animeboynz.kmd.ui.home.tabs.MyId
 import com.animeboynz.kmd.ui.home.tabs.ToolsTab
+import com.animeboynz.kmd.ui.home.tabs.VerifyTab
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import soup.compose.material.motion.animation.materialFadeThroughIn
@@ -51,6 +52,7 @@ object HomeScreen : Screen() {
             add(OrdersTab)
             add(MyId)
             add(ToolsTab)
+            add(VerifyTab)
         }
 
         val navigator = LocalNavigator.currentOrThrow

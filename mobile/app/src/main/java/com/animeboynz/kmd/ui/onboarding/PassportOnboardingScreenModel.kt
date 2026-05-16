@@ -10,16 +10,19 @@ import com.animeboynz.kmd.passport.MrzParser
 import com.animeboynz.kmd.passport.PassportChipSummary
 import com.animeboynz.kmd.passport.PassportNfcReader
 import com.animeboynz.kmd.passport.Td3Mrz
+import com.animeboynz.kmd.network.SupabaseUsersApi
 import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.dynamsoft.mrzscannerbundle.ui.MRZScanResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import java.io.ByteArrayOutputStream
 
 class PassportOnboardingScreenModel(
     private val generalPreferences: GeneralPreferences,
+    private val okHttpClient: OkHttpClient,
 ) : ScreenModel {
 
     sealed class State {
@@ -175,11 +178,14 @@ class PassportOnboardingScreenModel(
             .ifBlank { mrz.nameOfHolder }
             .ifBlank { "N.Z. Traveller" }
         val documentNumber = mrz.documentNumber.ifBlank { "UNKNOWN" }
-        val credentialId = "EID-${documentNumber.takeLast(4).padStart(4, '0')}"
+        val numericId = generalPreferences.digitalIdNumericId.get().takeIf { it > 0L } ?: generateEidNumber()
+        val credentialId = "EID-$numericId"
+        val dob = mrz.dateOfBirth.toDisplayDate()
 
+        generalPreferences.digitalIdNumericId.set(numericId)
         generalPreferences.digitalIdHolderName.set(holderName)
         generalPreferences.digitalIdDocumentNumber.set(documentNumber)
-        generalPreferences.digitalIdDateOfBirth.set(mrz.dateOfBirth.toDisplayDate())
+        generalPreferences.digitalIdDateOfBirth.set(dob)
         generalPreferences.digitalIdExpiry.set(mrz.dateOfExpiry.ifBlank { "2030-01-01" })
         generalPreferences.digitalIdCredentialId.set(credentialId)
         summary.portrait?.let { portrait ->
@@ -187,6 +193,15 @@ class PassportOnboardingScreenModel(
         }
         generalPreferences.digitalIdGenerated.set(true)
         generalPreferences.passportOnboardingCompleted.set(true)
+
+        screenModelScope.launch {
+            SupabaseUsersApi.upsertUser(
+                client = okHttpClient,
+                id = numericId,
+                name = holderName,
+                dob = dob,
+            )
+        }
     }
 
     fun markOnboardingComplete() {
@@ -202,5 +217,9 @@ class PassportOnboardingScreenModel(
     private fun String.toDisplayDate(): String {
         if (length != 6) return ifBlank { "Unknown" }
         return "${substring(4, 6)}/${substring(2, 4)}/${substring(0, 2)}"
+    }
+
+    private fun generateEidNumber(): Long {
+        return System.currentTimeMillis()
     }
 }

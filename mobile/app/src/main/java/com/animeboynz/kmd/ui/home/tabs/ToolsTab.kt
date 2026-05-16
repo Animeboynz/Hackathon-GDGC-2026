@@ -225,7 +225,7 @@ private fun QrVerificationCard(
     payload: String,
     method: String,
 ) {
-    val qrBitmap = remember(payload) { payload.toQrBitmap(size = 720) }
+    val qrBitmap = remember(payload) { payload.toQrBitmap(size = 900) }
 
     Card(
         modifier = Modifier
@@ -259,10 +259,10 @@ private fun QrVerificationCard(
                     bitmap = qrBitmap.asImageBitmap(),
                     contentDescription = "Digital ID QR code",
                     modifier = Modifier
-                        .size(220.dp)
+                        .size(320.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color.White)
-                        .padding(12.dp),
+                        .padding(10.dp),
                 )
             }
 
@@ -422,13 +422,13 @@ private fun String.toQrBitmap(size: Int): Bitmap {
     }
 }
 
-private fun Bitmap?.toCompressedQrPhotoBase64(maxChars: Int = 1_650): String {
+private fun Bitmap?.toCompressedQrPhotoBase64(maxChars: Int = 1_250): String {
     if (this == null) return ""
 
     val source = centerCropSquare()
     var best = ""
-    val sides = listOf(48, 40, 32, 28, 24, 20, 16)
-    val qualities = listOf(35, 28, 22, 16, 10, 6)
+    val sides = listOf(40, 36, 32, 28, 24, 20)
+    val qualities = listOf(42, 35, 28, 22, 16, 10)
 
     for (side in sides) {
         val scaled = Bitmap.createScaledBitmap(source, side, side, true)

@@ -100,6 +100,7 @@ import com.dynamsoft.mrzscannerbundle.ui.MRZScanResult
 import com.dynamsoft.mrzscannerbundle.ui.MRZScannerActivity
 import com.dynamsoft.mrzscannerbundle.ui.MRZScannerConfig
 import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
 import org.jmrtd.lds.icao.MRZInfo
 import org.koin.compose.koinInject
 import java.io.File
@@ -114,7 +115,8 @@ object PassportOnboardingScreen : Screen() {
     @Composable
     override fun Content() {
         val generalPreferences = koinInject<GeneralPreferences>()
-        val screenModel = rememberScreenModel { PassportOnboardingScreenModel(generalPreferences) }
+        val okHttpClient = koinInject<OkHttpClient>()
+        val screenModel = rememberScreenModel { PassportOnboardingScreenModel(generalPreferences, okHttpClient) }
         val state by screenModel.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
