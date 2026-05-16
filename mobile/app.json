@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "VERID",
+    "slug": "passport-verify",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "passportverify",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hackathon.passportverify",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera scans the passport QR code to start verification."
+      }
+    },
+    "android": {
+      "package": "com.hackathon.passportverify",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      },
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow VERID to scan QR codes on passports."
+        }
+      ]
+    ]
+  }
+}
