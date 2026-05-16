@@ -1,22 +1,20 @@
-# Passport Verify MVP
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-## View it (simplest)
+# Run and deploy your AI Studio app
 
-Just the UI + local crypto — **no blockchain or backend required**:
+This contains everything you need to run your app locally.
 
-```bash
-cd frontend && npm install && npm run dev
-```
+View your app in AI Studio: https://ai.studio/apps/20cf8e96-f8b3-40d5-8ea6-379a9bc96a3e
 
-Open the URL Vite prints (usually **http://localhost:5173**). Click **Start verification** → **Sign challenge**.
+## Run Locally
 
-If the backend is running on port 8787, the same page switches to **full verification** (blockchain checks) automatically.
+**Prerequisites:**  Node.js
 
-## Full stack (optional)
 
-1. Terminal A: `cd contracts && npm install && npx hardhat node`
-2. Terminal B: `cd contracts && npx hardhat run scripts/deploy.js --network localhost` — copy `contractAddress` from `contracts/deployments/localhost.json`
-3. Terminal C: `cd backend && npm install && cp .env.example .env` — set `REGISTRY_ADDRESS` and `ISSUER_PRIVATE_KEY` (Hardhat #0 — see README notes in repo history or deploy output), then `npm start`
-4. Terminal D: `cd frontend && npm run dev`
-
-Mobile app: `cd mobile && npm install && npx expo start`
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

@@ -1,0 +1,6 @@
+{
+  "name": "TrustVouch",
+  "description": "A social verification platform where users vouch for each other's details to build a collective trust score.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

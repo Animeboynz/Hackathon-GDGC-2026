@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public profile details and trust statistics for a user.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Unique username chosen by the user." },
+        "displayName": { "type": "string", "description": "Public name for display." },
+        "details": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" },
+            "occupation": { "type": "string" },
+            "bio": { "type": "string" }
+          }
+        },
+        "trustworthyCount": { "type": "number", "description": "Count of positive votes." },
+        "untrustworthyCount": { "type": "number", "description": "Count of negative votes." },
+        "isNfcVerified": { "type": "boolean", "description": "Whether the user has verified via NFC." },
+        "nfcVerifiedAt": { "type": "string", "format": "date-time", "description": "When the NFC verification occurred." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "displayName", "trustworthyCount", "untrustworthyCount"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A status update or message shared by a user.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "content": { "type": "string" },
+        "likesCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "authorUsername", "content", "likesCount", "createdAt"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "A vote cast by one user for another.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["trustworthy", "untrustworthy"] },
+        "voterName": { "type": "string", "description": "Display name of the voter." },
+        "voterUsername": { "type": "string", "description": "Username of the voter." },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "voterName", "voterUsername", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data."
+    },
+    "/users/{userId}/votes/{voterId}": {
+      "schema": "Vote",
+      "description": "Individual votes cast for this user."
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Public status updates."
+    },
+    "/posts/{postId}/likes/{userId}": {
+      "schema": "object",
+      "description": "Likes cast for a specific post."
+    }
+  }
+}

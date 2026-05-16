@@ -1,0 +1,140 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['username', 'displayName', 'trustworthyCount', 'untrustworthyCount', 'createdAt', 'details']) &&
+             data.keys().size() >= 6 &&
+             data.username is string && data.username.size() <= 100 &&
+             data.displayName is string && data.displayName.size() <= 200 &&
+             data.trustworthyCount is number && data.trustworthyCount >= 0 &&
+             data.untrustworthyCount is number && data.untrustworthyCount >= 0 &&
+             data.createdAt is timestamp &&
+             data.details is map &&
+             data.details.get('location', '') is string &&
+             data.details.get('occupation', '') is string &&
+             data.details.get('bio', '') is string &&
+             data.get('isNfcVerified', false) is bool &&
+             (data.get('nfcVerifiedAt', request.time) is timestamp || data.get('nfcVerifiedAt', null) == null);
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'authorUsername', 'content', 'likesCount', 'createdAt']) &&
+             data.keys().size() == 6 &&
+             data.authorId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() <= 200 &&
+             data.authorUsername is string && data.authorUsername.size() <= 100 &&
+             data.content is string && data.content.size() <= 1000 &&
+             data.likesCount is number && data.likesCount >= 0 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidVote(data) {
+      return data.keys().hasAll(['type', 'voterName', 'voterUsername', 'timestamp']) &&
+             data.keys().size() == 4 &&
+             data.type in ['trustworthy', 'untrustworthy'] &&
+             data.voterName is string && data.voterName.size() <= 200 &&
+             data.voterUsername is string && data.voterUsername.size() <= 100 &&
+             data.timestamp == request.time;
+    }
+
+    // --- Rules ---
+
+    // Users collection
+    match /users/{userId} {
+      // Anyone signed in can view other users for verification
+      allow get, list: if isSignedIn();
+      
+      // User can create their own profile
+      allow create: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().trustworthyCount == 0 && 
+                    incoming().untrustworthyCount == 0 &&
+                    incoming().createdAt == request.time;
+
+      // User can update their own profile (details and NFC status)
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'details', 'isNfcVerified', 'nfcVerifiedAt'])
+      );
+
+      // System-like update: anyone can increment counts IF they also record a vote in the same batch
+      // Pillar 7: existsAfter
+      allow update: if isSignedIn() && !isOwner(userId) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['trustworthyCount']) && 
+         incoming().trustworthyCount == (existing().get('trustworthyCount', 0)) + 1 &&
+         existsAfter(/databases/$(database)/documents/users/$(userId)/votes/$(request.auth.uid)) &&
+         getAfter(/databases/$(database)/documents/users/$(userId)/votes/$(request.auth.uid)).data.type == 'trustworthy') ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['untrustworthyCount']) && 
+         incoming().untrustworthyCount == (existing().get('untrustworthyCount', 0)) + 1 &&
+         existsAfter(/databases/$(database)/documents/users/$(userId)/votes/$(request.auth.uid)) &&
+         getAfter(/databases/$(database)/documents/users/$(userId)/votes/$(request.auth.uid)).data.type == 'untrustworthy')
+      );
+    }
+
+    // Votes subcollection
+    match /users/{userId}/votes/{voterId} {
+      // People can only see their own votes or the target can see all? 
+      // Let's say only the voter can read their vote to respect privacy if needed, 
+      // but usually votes are public in such systems.
+      allow read: if isSignedIn();
+
+      // Voter can only cast one vote per target
+      allow create: if isOwner(voterId) && isValidVote(incoming()) && 
+                    !isOwner(userId) && // Can't vote for yourself
+                    !exists(/databases/$(database)/documents/users/$(userId)/votes/$(voterId));
+      
+      // Votes are immutable
+      allow update, delete: if false;
+    }
+
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && isValidPost(incoming()) && 
+                    incoming().likesCount == 0;
+      
+      // Update for likesCount (atomic with postLike creation)
+      allow update: if isSignedIn() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['likesCount']) &&
+        incoming().likesCount == (existing().get('likesCount', 0)) + 1 &&
+        existsAfter(/databases/$(database)/documents/posts/$(postId)/likes/$(request.auth.uid))
+      );
+      
+      allow delete: if isSignedIn() && existing().authorId == request.auth.uid;
+    }
+
+    // Post Likes subcollection
+    match /posts/{postId}/likes/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && 
+                    !exists(/databases/$(database)/documents/posts/$(postId)/likes/$(userId));
+      allow delete: if isOwner(userId);
+    }
+  }
+}
