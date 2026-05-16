@@ -1,0 +1,138 @@
+package com.animeboynz.kmd.ui.onboarding
+
+import android.graphics.Bitmap
+import android.nfc.Tag
+import cafe.adriel.voyager.core.model.ScreenModel
+import cafe.adriel.voyager.core.model.screenModelScope
+import com.animeboynz.kmd.passport.MrzOcr
+import com.animeboynz.kmd.passport.MrzParser
+import com.animeboynz.kmd.passport.PassportChipSummary
+import com.animeboynz.kmd.passport.PassportNfcReader
+import com.animeboynz.kmd.passport.Td3Mrz
+import com.animeboynz.kmd.preferences.GeneralPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class PassportOnboardingScreenModel(
+    private val generalPreferences: GeneralPreferences,
+) : ScreenModel {
+
+    sealed class State {
+        data object Welcome : State()
+
+        data object ScanPhoto : State()
+
+        data class ReviewMrz(
+            val mrz: Td3Mrz,
+        ) : State()
+
+        data class ManualMrz(
+            val line1: String,
+            val line2: String,
+            val error: String? = null,
+        ) : State()
+
+        data class WaitNfc(
+            val mrz: Td3Mrz,
+        ) : State()
+
+        data class ChipRead(
+            val summary: PassportChipSummary,
+        ) : State()
+
+        data class Fatal(
+            val message: String,
+        ) : State()
+    }
+
+    private val _state = MutableStateFlow<State>(State.Welcome)
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    private var lastMrzForNfc: Td3Mrz? = null
+
+    fun goToScan() {
+        _state.value = State.ScanPhoto
+    }
+
+    fun openManualEntry() {
+        _state.value = State.ManualMrz(line1 = "", line2 = "")
+    }
+
+    fun updateManualLine1(value: String) {
+        val s = _state.value
+        if (s is State.ManualMrz) {
+            _state.value = s.copy(line1 = value, error = null)
+        }
+    }
+
+    fun updateManualLine2(value: String) {
+        val s = _state.value
+        if (s is State.ManualMrz) {
+            _state.value = s.copy(line2 = value, error = null)
+        }
+    }
+
+    fun submitManualMrz() {
+        val s = _state.value as? State.ManualMrz ?: return
+        MrzParser.parseManualLines(s.line1, s.line2).fold(
+            onSuccess = { mrz -> _state.value = State.ReviewMrz(mrz) },
+            onFailure = { e ->
+                _state.value = s.copy(error = e.message ?: "Invalid MRZ")
+            },
+        )
+    }
+
+    fun onPhotoCaptured(bitmap: Bitmap) {
+        screenModelScope.launch {
+            _state.value = State.ScanPhoto
+            val mrz = withContext(Dispatchers.Default) {
+                val text = runCatching { MrzOcr.recognizeBlocking(bitmap) }.getOrNull().orEmpty()
+                MrzParser.extractTd3FromOcr(text)
+            }
+            if (mrz != null) {
+                _state.value = State.ReviewMrz(mrz)
+            } else {
+                _state.value = State.ManualMrz(
+                    line1 = "",
+                    line2 = "",
+                    error = "Could not read MRZ. Enter both lines manually.",
+                )
+            }
+        }
+    }
+
+    fun confirmMrzForNfc(mrz: Td3Mrz) {
+        lastMrzForNfc = mrz
+        _state.value = State.WaitNfc(mrz)
+    }
+
+    fun editMrzAgain(mrz: Td3Mrz) {
+        _state.value = State.ManualMrz(line1 = mrz.line1, line2 = mrz.line2)
+    }
+
+    fun onNfcTag(tag: Tag) {
+        val s = _state.value as? State.WaitNfc ?: return
+        screenModelScope.launch {
+            val result = PassportNfcReader.readDg1(tag, s.mrz)
+            result.fold(
+                onSuccess = { summary -> _state.value = State.ChipRead(summary) },
+                onFailure = { e ->
+                    _state.value = State.Fatal(e.message ?: "NFC read failed")
+                },
+            )
+        }
+    }
+
+    fun retryNfcAfterError() {
+        val mrz = lastMrzForNfc ?: return
+        _state.value = State.WaitNfc(mrz)
+    }
+
+    fun markOnboardingComplete() {
+        generalPreferences.passportOnboardingCompleted.set(true)
+    }
+}

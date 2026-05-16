@@ -1,0 +1,208 @@
+<resources>
+    <string name="app_name">VerID</string>
+
+    /////////////////////////////
+    // Generic
+    <string name="generic_cancel">Cancel</string>
+    <string name="generic_confirm">Confirm</string>
+    <string name="generic_save">Save</string>
+    <string name="selected">Selected</string>
+    <string name="sku">SKU</string>
+    <string name="color">Colour</string>
+    <string name="size">Size</string>
+    <string name="price">Price</string>
+    <string name="quantity">Quantity</string>
+    <string name="store">Store</string>
+
+    //Orders Tab
+    <string name="orders_tab">Orders</string>
+    <string name="orders_title">Customer Orders</string>
+    <string name="orders_none">No Customer Orders</string>
+    <string name="orders_add">Add Order</string>
+    <string name="items_add">Add Item to Order</string>
+    <string name="orders_item">Add New Item to Order</string>
+    <string name="orders_new">Create New Order</string>
+    <string name="orders_edit">Edit Order</string>
+    <string name="orders_item_edit">Edit Order Item</string>
+    <string name="orders_edit_notes">Edit Order Notes</string>
+    <string name="orders_details">Order Details</string>
+    <string name="orders_items">Order Items</string>
+    <string name="orders_emp">Employee: %s</string>
+    <string name="orders_customer_phone">Phone No: %s</string>
+    <string name="orders_delete_success">Order Deleted!</string>
+    <string name="orders_insert_success">Order added successfully!</string>
+    <string name="orders_update_success">Order updated successfully!</string>
+    <string name="item_insert_success">Item added successfully!</string>
+    <string name="item_update_success">Item updated successfully!</string>
+    <string name="item_name_unknown">Name Not Found</string>
+    <string name="entry_item_present">Present</string>
+    <string name="entry_item_missing">Missing</string>
+    <string name="orders_loading">Loading...</string>
+
+    <string name="orders_field_date">Date</string>
+    <string name="orders_field_empid">Employee ID</string>
+    <string name="orders_field_name">Name</string>
+    <string name="orders_field_phone">Phone</string>
+    <string name="orders_field_misc">Misc</string>
+    <string name="orders_field_notes">Notes</string>
+    <string name="orders_field_status">Status</string>
+    <string name="orders_field_notes_add">Add Notes</string>
+
+    <string name="orders_state_not_ordered">Not Ordered</string>
+    <string name="orders_state_ordered">Ordered</string>
+    <string name="orders_state_not_notified">Arrived - Not Notified</string>
+    <string name="orders_state_waiting_pickup">Waiting for Pickup</string>
+    <string name="orders_state_cancelled">Cancelled</string>
+    <string name="orders_state_completed">Completed</string>
+
+    <string name="orders_errors_sku">SKU is Required</string>
+    <string name="orders_errors_color">Colour is Required</string>
+    <string name="orders_errors_size">Size is Required</string>
+    <string name="orders_errors_price">Price is Required</string>
+    <string name="orders_errors_quantity">Quantity is Required</string>
+    <string name="orders_errors_date">Date is Required</string>
+    <string name="orders_errors_name">Name is Required</string>
+    <string name="orders_errors_phone">Phone is Required</string>
+    <string name="input_errors_warning">Complete all required fields</string>
+
+    //SKU Search Tab
+    <string name="my_id">My ID</string>
+    <string name="sku_search_bar">Search products...</string>
+    <string name="product_details">Product Details</string>
+    <string name="product_found">Selected Item Found</string>
+    <string name="product_no_barcodes">No barcodes found for product</string>
+    <string name="product_input_errors_warning">Select both Colour and Size</string>
+    <string name="action_get_barcode">Get Barcode</string>
+    <string name="search_url_a">https://www.kathmandu.%s/shop?q=%s</string>
+    <string name="search_url_b">https://www.kathmanduoutdoor.%s/shop?q=%s</string>
+    <string name="search_url_c">https://www.kathmanduoutdoor.ca/catalogsearch/result/?q=%s</string>
+
+    //Tools Tab
+    <string name="tools_tab">Tools</string>
+    <string name="tools_cash_count">Cash Count</string>
+    <string name="tools_cash_count_quantity">Qty</string>
+    <string name="tools_cash_count_banking">Banking</string>
+    <string name="tools_cash_count_next_takings">Proceed to Takings</string>
+    <string name="tools_cash_count_remaining_takings">Left to take</string>
+    <string name="tools_cash_count_max_takings">Cannot take more than %d</string>
+    <string name="tools_cash_count_expected_takings">Expected Takings</string>
+    <string name="tools_cash_count_current_takings">Current Takings</string>
+    <string name="tools_cash_count_prev_count">Back to Cash Counter</string>
+    <string name="tools_cash_count_calc_float">Calculate Remaining Float</string>
+    <string name="tools_cash_count_remaining_float">Remaining Float</string>
+    <string name="tools_cash_count_total">Total</string>
+    <string name="tools_cash_count_prev_takings">Back to Takings</string>
+    <string name="tools_cash_count_reset">Reset</string>
+
+    //Preferences Screen
+    <string name="pref_settings_title">Settings</string>
+    <string name="pref_general_title">General</string>
+    <string name="pref_general_summary">Store Number, Store Name</string>
+    <string name="pref_employees_title">Employees</string>
+    <string name="pref_employees_summary">Add and edit employees</string>
+    <string name="pref_appearance_title">Appearance</string>
+    <string name="pref_appearance_summary">Theme, tabs</string>
+    <string name="pref_data_title">Data</string>
+    <string name="pref_data_summary">Database, storage locations</string>
+    <string name="pref_about_title">About</string>
+
+    //General Preference
+    <string name="pref_general_category_store">Store Details</string>
+    <string name="pref_general_store_name">Store Name</string>
+    <string name="pref_general_store_name_description">Enter store name here e.g. Newmarket</string>
+    <string name="pref_general_store_number">Store Number</string>
+    <string name="pref_general_store_number_description">Enter store number here e.g. 183</string>
+    <string name="pref_general_country_code">Country Code</string>
+    <string name="pref_general_country_code_description">Select Region:\nNZ: New Zealand\nAU: Australia\nUS: United States\nGB: United Kingdom\nCA: Canada\nFR: France\nDE: Germany</string>
+    <string name="pref_general_order_number_pad">Order Number Padding</string>
+    <string name="pref_general_order_number_pad_description">e.g. When set to 4, order number 23 will become 0023</string>
+
+    //Employees Preference
+    <string name="employee_active">Active</string>
+    <string name="employee_disabled">Disabled</string>
+    <string name="pref_employees_add">Add New Employee</string>
+    <string name="pref_employees_modify">Employee Modify</string>
+    <string name="pref_employees_current">Current Employees</string>
+    <string name="pref_employees_deactivated">Deactivated Employees</string>
+    <string name="employee_update_prompt">Do you want to change the status of %s?</string>
+    <string name="employee_insert_success">Employee added successfully!</string>
+    <string name="employee_update_success">Changed status for %s (ID: %s)</string>
+
+    //Appearance Preferences
+    <string name="pref_appearance_category_theme">Theme</string>
+    <string name="pref_appearance_material_you_title">Material You</string>
+    <string name="pref_appearance_material_you_summary">Enable Material You dynamic colors.</string>
+    <string name="pref_appearance_material_you_summary_disabled">Only available for Android 12 and newer.</string>
+    <string name="pref_appearance_category_display">Display</string>
+    <string name="label_default">Default</string>
+    <string name="theme_monet">Dynamic</string>
+    <string name="theme_greenapple">Green Apple</string>
+    <string name="theme_lavender">Lavender</string>
+    <string name="theme_midnightdusk">Midnight Dusk</string>
+    <string name="theme_nord">Nord</string>
+    <string name="theme_strawberrydaiquiri">Strawberry Daiquiri</string>
+    <string name="theme_tako">Tako</string>
+    <string name="theme_tealturquoise">Teal &amp; Turquoise</string>
+    <string name="theme_yinyang">Yin &amp; Yang</string>
+    <string name="theme_yotsuba">Yotsuba</string>
+    <string name="theme_tidalwave">Tidal Wave</string>
+
+    //Data Preference
+    <string name="pref_data_delete_all_orders">Delete all customer orders</string>
+    <string name="pref_data_orders_cleared">All customer orders deleted!</string>
+    <string name="pref_data_delete_all_employees">Delete all employees</string>
+    <string name="pref_data_employees_cleared">All employees deleted!</string>
+
+    //About screen
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+    <string name="clipboard_copy_error">Failed to copy to clipboard</string>
+    <string name="check_for_updates">Open Releases on GitHub</string>
+    <string name="check_for_updates_not_implemented">Updater not yet implemented!</string>
+    <string name="licenses">Open source licenses</string>
+    <string name="version">Version</string>
+
+    //Crash screen
+    <string name="crash_screen_title">Oops</string>
+    <string name="crash_screen_subtitle">Looks like %s experienced an unexpected error.</string>
+    <string name="crash_screen_logs_title">Crash logs:</string>
+    <string name="crash_screen_share">Share crash logs</string>
+    <string name="crash_screen_restart">Restart the app</string>
+
+    //App Theme
+    <string name="pref_appearance_darkmode_system">System</string>
+    <string name="pref_appearance_darkmode_light">Light</string>
+    <string name="pref_appearance_darkmode_dark">Dark</string>
+
+    // Passport onboarding
+    <string name="passport_onboarding_title">Verify identity</string>
+    <string name="passport_onboarding_intro">We will read the machine-readable zone (MRZ) from your passport photo page, then use it to unlock the passport chip over NFC and show the data stored on the chip.</string>
+    <string name="passport_onboarding_scan_photo">Scan photo page</string>
+    <string name="passport_onboarding_enter_mrz_manual">Enter MRZ manually</string>
+    <string name="passport_onboarding_scan_instructions">Lay the passport flat and fill the frame with the photo page so both MRZ lines are visible. Tap capture when the text looks sharp.</string>
+    <string name="passport_onboarding_capture">Capture</string>
+    <string name="passport_onboarding_camera_denied">Camera permission is required to scan the passport.</string>
+    <string name="passport_onboarding_mrz_review">Check the MRZ we read. If anything looks wrong, edit it before continuing.</string>
+    <string name="passport_onboarding_continue_nfc">Continue to NFC</string>
+    <string name="passport_onboarding_edit_mrz">Edit MRZ</string>
+    <string name="passport_onboarding_manual_hint">Enter exactly two lines of 44 characters each (TD3 passport MRZ).</string>
+    <string name="passport_onboarding_mrz_line1">MRZ line 1</string>
+    <string name="passport_onboarding_mrz_line2">MRZ line 2</string>
+    <string name="passport_onboarding_validate_mrz">Validate MRZ</string>
+    <string name="passport_onboarding_back_camera">Back to camera</string>
+    <string name="passport_onboarding_nfc_instructions">Hold the closed passport against the back of the phone where the NFC antenna is. Keep it steady until the read finishes.</string>
+    <string name="passport_onboarding_chip_success">Chip data (DG1)</string>
+    <string name="passport_onboarding_raw_dg1">Raw MRZ from chip</string>
+    <string name="passport_onboarding_enter_app">Continue to app</string>
+    <string name="passport_onboarding_nfc_failed">Could not read the chip</string>
+    <string name="passport_onboarding_try_nfc_again">Try NFC again</string>
+    <string name="passport_field_names">Name</string>
+    <string name="passport_field_doc_number">Document number</string>
+    <string name="passport_field_nationality">Nationality</string>
+    <string name="passport_field_dob">Date of birth (YYMMDD)</string>
+    <string name="passport_field_expiry">Date of expiry (YYMMDD)</string>
+    <string name="passport_field_gender">Gender</string>
+    <string name="passport_field_issuer">Issuing state</string>
+    <string name="passport_field_doc_type">Document code</string>
+
+    /////////////////////////////
+</resources>
