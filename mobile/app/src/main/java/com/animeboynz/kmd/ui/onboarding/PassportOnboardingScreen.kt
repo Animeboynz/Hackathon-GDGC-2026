@@ -1,6 +1,19 @@
 package com.animeboynz.kmd.ui.onboarding
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -52,6 +65,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,12 +76,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -85,6 +102,7 @@ import com.dynamsoft.mrzscannerbundle.ui.MRZScannerConfig
 import kotlinx.coroutines.delay
 import org.jmrtd.lds.icao.MRZInfo
 import org.koin.compose.koinInject
+import java.io.File
 
 private val KycRadius = 16.dp
 private val TapMin = 52.dp
@@ -848,11 +866,34 @@ private fun SelfieCheckStep(
     onFaceMatch: () -> Unit,
 ) {
     val context = LocalContext.current
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var capturedSelfie by remember { mutableStateOf<Bitmap?>(null) }
+    var isComparing by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasCameraPermission = granted
+    }
     val holderName = summary.mrzInfo.nameOfHolder.ifBlank {
         listOf(summary.mrzInfo.primaryIdentifier, summary.mrzInfo.secondaryIdentifier)
             .filter { it.isNotBlank() }
             .joinToString(" ")
     }.ifBlank { context.getString(R.string.passport_onboarding_selfie_default_holder) }
+
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    LaunchedEffect(isComparing) {
+        if (!isComparing) return@LaunchedEffect
+        delay(2_400)
+        onFaceMatch()
+    }
 
     TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -876,7 +917,14 @@ private fun SelfieCheckStep(
         modifier = Modifier.fillMaxWidth(),
     )
 
-    SelfieScanVisual(modifier = Modifier.padding(top = 14.dp))
+    SelfieScanVisual(
+        passportBitmap = summary.portrait,
+        capturedSelfie = capturedSelfie,
+        isComparing = isComparing,
+        hasCameraPermission = hasCameraPermission,
+        onImageCaptureReady = { imageCapture = it },
+        modifier = Modifier.padding(top = 14.dp),
+    )
 
     KycElevatedCard {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -891,20 +939,69 @@ private fun SelfieCheckStep(
             )
             MatchRow(
                 label = context.getString(R.string.passport_onboarding_selfie_compare_face),
-                value = context.getString(R.string.passport_onboarding_selfie_confidence),
-                done = true,
+                value = when {
+                    isComparing -> context.getString(R.string.passport_onboarding_selfie_comparing)
+                    capturedSelfie != null -> context.getString(R.string.passport_onboarding_selfie_captured)
+                    else -> context.getString(R.string.passport_onboarding_selfie_waiting)
+                },
+                done = isComparing || capturedSelfie != null,
             )
         }
     }
 
     KycPrimaryButton(
-        text = context.getString(R.string.passport_onboarding_selfie_confirm),
-        onClick = onFaceMatch,
+        text = when {
+            isComparing -> context.getString(R.string.passport_onboarding_selfie_comparing_button)
+            capturedSelfie != null -> context.getString(R.string.passport_onboarding_selfie_retake)
+            else -> context.getString(R.string.passport_onboarding_selfie_capture)
+        },
+        enabled = hasCameraPermission && imageCapture != null && !isComparing,
+        onClick = {
+            val capture = imageCapture
+            if (capture != null) {
+                val outputFile = File(context.cacheDir, "verid-selfie-${System.currentTimeMillis()}.jpg")
+                val outputOptions = ImageCapture.OutputFileOptions.Builder(outputFile).build()
+                capture.takePicture(
+                    outputOptions,
+                    ContextCompat.getMainExecutor(context),
+                    object : ImageCapture.OnImageSavedCallback {
+                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                            capturedSelfie = outputFile.decodeBitmapRespectingExif()
+                            isComparing = true
+                        }
+
+                        override fun onError(exception: ImageCaptureException) {
+                            capturedSelfie = null
+                            isComparing = false
+                        }
+                    },
+                )
+            }
+        },
     )
+
+    if (!hasCameraPermission) {
+        Text(
+            text = context.getString(R.string.passport_onboarding_selfie_permission),
+            style = MaterialTheme.typography.bodySmall,
+            color = PassportKycColors.muted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 @Composable
-private fun SelfieScanVisual(modifier: Modifier = Modifier) {
+private fun SelfieScanVisual(
+    passportBitmap: Bitmap?,
+    capturedSelfie: Bitmap?,
+    isComparing: Boolean,
+    hasCameraPermission: Boolean,
+    onImageCaptureReady: (ImageCapture) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val infinite = rememberInfiniteTransition(label = "selfieScan")
     val rotation by infinite.animateFloat(
         initialValue = 0f,
@@ -919,25 +1016,152 @@ private fun SelfieScanVisual(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(250.dp),
+            .height(if (isComparing) 300.dp else 250.dp),
         contentAlignment = Alignment.Center,
     ) {
+        if (isComparing && capturedSelfie != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FaceCompareImage(label = "Passport", bitmap = passportBitmap, placeholder = "👤")
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .graphicsLayer { rotationZ = rotation }
+                        .border(3.dp, PassportKycColors.primary, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("↔", color = PassportKycColors.primary, fontWeight = FontWeight.Bold)
+                }
+                FaceCompareImage(label = "Selfie", bitmap = capturedSelfie, placeholder = "◉")
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(224.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(3.dp, PassportKycColors.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    capturedSelfie != null -> {
+                        Image(
+                            bitmap = capturedSelfie.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    hasCameraPermission -> {
+                        AndroidView(
+                            factory = { viewContext ->
+                                PreviewView(viewContext).apply {
+                                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                    bindSelfieCamera(
+                                        context = context,
+                                        lifecycleOwner = lifecycleOwner,
+                                        previewView = this,
+                                        onImageCaptureReady = onImageCaptureReady,
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    else -> {
+                        Text("◉", fontSize = 68.sp, color = PassportKycColors.primary)
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer { rotationZ = rotation }
+                        .border(2.dp, PassportKycColors.primaryHover, CircleShape),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FaceCompareImage(label: String, bitmap: Bitmap?, placeholder: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(
             modifier = Modifier
-                .size(224.dp)
+                .size(112.dp)
                 .clip(CircleShape)
                 .background(Color.White)
                 .border(3.dp, PassportKycColors.primary, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Text("◉", fontSize = 68.sp, color = PassportKycColors.primary)
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer { rotationZ = rotation }
-                    .border(2.dp, PassportKycColors.primaryHover, CircleShape),
-            )
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(placeholder, fontSize = 42.sp, color = PassportKycColors.primary)
+            }
         }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = PassportKycColors.muted)
+    }
+}
+
+private fun bindSelfieCamera(
+    context: android.content.Context,
+    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    previewView: PreviewView,
+    onImageCaptureReady: (ImageCapture) -> Unit,
+) {
+    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+    cameraProviderFuture.addListener(
+        {
+            val cameraProvider = cameraProviderFuture.get()
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+            val imageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build()
+            val cameraSelector = runCatching {
+                if (cameraProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) {
+                    CameraSelector.DEFAULT_FRONT_CAMERA
+                } else {
+                    CameraSelector.DEFAULT_BACK_CAMERA
+                }
+            }.getOrDefault(CameraSelector.DEFAULT_BACK_CAMERA)
+
+            runCatching {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture)
+                onImageCaptureReady(imageCapture)
+            }
+        },
+        ContextCompat.getMainExecutor(context),
+    )
+}
+
+private fun File.decodeBitmapRespectingExif(): Bitmap? {
+    val bitmap = BitmapFactory.decodeFile(absolutePath) ?: return null
+    val orientation = ExifInterface(absolutePath).getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL,
+    )
+    val rotation = when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> 0f
+    }
+    if (rotation == 0f) return bitmap
+
+    val matrix = Matrix().apply { postRotate(rotation) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
+        if (it != bitmap) bitmap.recycle()
     }
 }
 

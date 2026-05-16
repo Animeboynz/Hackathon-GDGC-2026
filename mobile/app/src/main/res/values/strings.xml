@@ -231,6 +231,13 @@
     <string name="passport_onboarding_selfie_compare_passport">Passport portrait</string>
     <string name="passport_onboarding_selfie_compare_face">Live selfie</string>
     <string name="passport_onboarding_selfie_confidence">98% confidence</string>
+    <string name="passport_onboarding_selfie_waiting">Waiting for capture</string>
+    <string name="passport_onboarding_selfie_captured">Captured</string>
+    <string name="passport_onboarding_selfie_comparing">Comparing faces…</string>
+    <string name="passport_onboarding_selfie_capture">Capture selfie</string>
+    <string name="passport_onboarding_selfie_retake">Capture again</string>
+    <string name="passport_onboarding_selfie_comparing_button">Comparing…</string>
+    <string name="passport_onboarding_selfie_permission">Camera permission is needed to capture your selfie.</string>
     <string name="passport_onboarding_selfie_confirm">Face match OK</string>
     <string name="passport_onboarding_id_ready_title">Digital ID ready</string>
     <string name="passport_onboarding_id_ready_body">Your passport chip, portrait, and selfie match are now combined into a local VerID credential.</string>

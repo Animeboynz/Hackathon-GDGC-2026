@@ -1,6 +1,8 @@
 package com.animeboynz.kmd.ui.onboarding
 
+import android.graphics.Bitmap
 import android.nfc.Tag
+import android.util.Base64
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.animeboynz.kmd.passport.DynamsoftMrzMapper
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 
 class PassportOnboardingScreenModel(
     private val generalPreferences: GeneralPreferences,
@@ -178,11 +181,20 @@ class PassportOnboardingScreenModel(
         generalPreferences.digitalIdDocumentNumber.set(documentNumber)
         generalPreferences.digitalIdExpiry.set(mrz.dateOfExpiry.ifBlank { "2030-01-01" })
         generalPreferences.digitalIdCredentialId.set(credentialId)
+        summary.portrait?.let { portrait ->
+            generalPreferences.digitalIdPortraitBase64.set(portrait.toJpegBase64())
+        }
         generalPreferences.digitalIdGenerated.set(true)
         generalPreferences.passportOnboardingCompleted.set(true)
     }
 
     fun markOnboardingComplete() {
         generalPreferences.passportOnboardingCompleted.set(true)
+    }
+
+    private fun Bitmap.toJpegBase64(): String {
+        val output = ByteArrayOutputStream()
+        compress(Bitmap.CompressFormat.JPEG, 86, output)
+        return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
     }
 }

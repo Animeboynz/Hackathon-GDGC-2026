@@ -1,6 +1,10 @@
 package com.animeboynz.kmd.ui.home.tabs
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,11 +34,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -110,6 +116,8 @@ private fun DigitalIdDashboard(preferences: GeneralPreferences) {
     val credentialId = preferences.digitalIdCredentialId.get()
     val documentNumber = preferences.digitalIdDocumentNumber.get()
     val expiry = preferences.digitalIdExpiry.get()
+    val portraitBase64 = preferences.digitalIdPortraitBase64.get()
+    val portraitBitmap = remember(portraitBase64) { portraitBase64.decodeBitmapOrNull() }
 
     Row(
         modifier = Modifier
@@ -119,16 +127,7 @@ private fun DigitalIdDashboard(preferences: GeneralPreferences) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .border(3.dp, PassportKycColors.primary, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("👤", fontSize = 20.sp)
-            }
+            PassportPhotoThumb(bitmap = portraitBitmap, sizeDp = 44)
             Column {
                 Text(text = "Hello,", style = MaterialTheme.typography.bodyMedium, color = PassportKycColors.muted)
                 Text(
@@ -192,6 +191,7 @@ private fun DigitalIdDashboard(preferences: GeneralPreferences) {
         credentialId = credentialId,
         documentNumber = documentNumber,
         expiry = expiry,
+        portraitBitmap = portraitBitmap,
     )
 }
 
@@ -259,6 +259,7 @@ private fun EmergencyIdPass(
     credentialId: String,
     documentNumber: String,
     expiry: String,
+    portraitBitmap: Bitmap?,
 ) {
     Spacer(modifier = Modifier.height(28.dp))
     Text(
@@ -292,9 +293,11 @@ private fun EmergencyIdPass(
                     .background(PassportKycColors.primary.copy(alpha = 0.35f)),
             )
             Column {
+                PassportPhotoThumb(bitmap = portraitBitmap, sizeDp = 76)
                 Text(
                     text = "ACTIVE",
                     modifier = Modifier
+                        .padding(top = 14.dp)
                         .clip(RoundedCornerShape(999.dp))
                         .background(PassportKycColors.lavender)
                         .padding(horizontal = 12.dp, vertical = 5.dp),
@@ -363,4 +366,34 @@ private fun CredentialField(label: String, value: String, modifier: Modifier = M
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.72f))
         Text(text = value, style = MaterialTheme.typography.bodyMedium, color = Color.White, fontWeight = FontWeight.Medium)
     }
+}
+
+@Composable
+private fun PassportPhotoThumb(bitmap: Bitmap?, sizeDp: Int) {
+    Box(
+        modifier = Modifier
+            .size(sizeDp.dp)
+            .clip(CircleShape)
+            .background(Color.White)
+            .border(3.dp, PassportKycColors.primary, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text("👤", fontSize = (sizeDp / 2).sp)
+        }
+    }
+}
+
+private fun String.decodeBitmapOrNull(): Bitmap? {
+    if (isBlank()) return null
+    return runCatching {
+        val bytes = Base64.decode(this, Base64.NO_WRAP)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }.getOrNull()
 }
