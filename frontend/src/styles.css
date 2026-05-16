@@ -1,0 +1,1242 @@
+/* ——— Design tokens ——— */
+:root {
+  --kyc-bg: #f0f2ff;
+  --kyc-card: #ffffff;
+  --kyc-primary: #4361ee;
+  --kyc-primary-hover: #3651d4;
+  --kyc-text: #1a1d26;
+  --kyc-muted: #6b7280;
+  --kyc-border: #e5e7eb;
+  --kyc-radius: 16px;
+  --kyc-shadow: 0 4px 24px rgba(67, 97, 238, 0.08);
+
+  --wallet-bg: #12121f;
+  --wallet-text: #f4f4f5;
+  --wallet-muted: #a1a1aa;
+
+  --nav-h: 56px;
+  --app-max: 390px;
+  --tap-min: 48px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--kyc-bg);
+  color: var(--kyc-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ——— App shell ——— */
+.app-shell {
+  max-width: var(--app-max);
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+.app-main {
+  flex: 1;
+  overflow-x: hidden;
+  animation: appFade 0.32s ease-out;
+}
+
+.app-main--wallet {
+  background: var(--wallet-bg);
+}
+
+@keyframes appFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.app-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--app-max);
+  display: flex;
+  gap: 0;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--kyc-border);
+  z-index: 100;
+}
+
+.app-shell--wallet .app-nav {
+  background: rgba(18, 18, 31, 0.94);
+  border-top-color: #2a2a3d;
+}
+
+.app-shell--wallet .app-nav-btn {
+  color: var(--wallet-muted);
+}
+
+.app-shell--wallet .app-nav-btn.is-active {
+  color: #fff;
+  background: #2a2a3d;
+  box-shadow: inset 0 0 0 1px #4361ee;
+}
+
+.app-nav-btn {
+  flex: 1;
+  min-height: var(--tap-min);
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--kyc-muted);
+  transition: background 0.2s, color 0.2s;
+}
+
+.app-nav-btn.is-active {
+  background: #eef1ff;
+  color: var(--kyc-primary);
+}
+
+/* ——— KYC flow ——— */
+.kyc-root {
+  min-height: 100%;
+  padding: 20px 16px 24px;
+  background: var(--kyc-bg);
+}
+
+.kyc-screen {
+  animation: kycEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes kycEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kyc-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 1rem;
+  letter-spacing: -0.02em;
+}
+
+.kyc-subtitle {
+  color: var(--kyc-muted);
+  margin: -0.5rem 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.kyc-subtitle--tight {
+  margin-top: 0.25rem;
+}
+
+.kyc-banner {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--kyc-primary);
+  background: #eef1ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 1rem;
+}
+
+.kyc-card {
+  background: var(--kyc-card);
+  border-radius: var(--kyc-radius);
+  box-shadow: var(--kyc-shadow);
+  border: 1px solid var(--kyc-border);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.kyc-radio-list {
+  padding: 4px 0;
+}
+
+.kyc-radio-row {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--kyc-border);
+  transition: background 0.15s;
+}
+
+.kyc-radio-row:last-child {
+  border-bottom: none;
+}
+
+.kyc-radio-row:hover,
+.kyc-radio-row.is-selected {
+  background: #f8f9ff;
+}
+
+.kyc-radio-row input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--kyc-primary);
+  flex-shrink: 0;
+}
+
+.kyc-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.kyc-radio-icon {
+  font-size: 1.35rem;
+}
+
+.kyc-btn-primary {
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: 8px;
+  border: none;
+  border-radius: var(--kyc-radius);
+  background: var(--kyc-primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.kyc-btn-primary:hover:not(:disabled) {
+  background: var(--kyc-primary-hover);
+}
+
+.kyc-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.kyc-btn-secondary {
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: 12px;
+  border: 1px solid var(--kyc-border);
+  border-radius: var(--kyc-radius);
+  background: #fff;
+  color: var(--kyc-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kyc-method-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.kyc-method-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px;
+  min-height: 96px;
+  border-radius: var(--kyc-radius);
+  border: 2px solid var(--kyc-border);
+  background: var(--kyc-card);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: var(--kyc-shadow);
+}
+
+.kyc-method-card:hover,
+.kyc-method-card.is-selected {
+  border-color: var(--kyc-primary);
+  box-shadow: 0 4px 20px rgba(67, 97, 238, 0.12);
+}
+
+.kyc-method-icon {
+  font-size: 1.75rem;
+}
+
+.kyc-method-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.kyc-method-desc {
+  color: var(--kyc-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.kyc-select-wrap {
+  padding: 14px 16px;
+}
+
+.kyc-select-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--kyc-muted);
+}
+
+.kyc-select-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  border: 1px solid var(--kyc-border);
+  border-radius: 12px;
+  background: #fafbff;
+}
+
+.kyc-select-flag {
+  font-size: 1.35rem;
+}
+
+.kyc-select {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--kyc-text);
+}
+
+.kyc-chevron {
+  color: var(--kyc-muted);
+  font-size: 0.7rem;
+}
+
+.kyc-section-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.kyc-doc-list {
+  padding: 0;
+}
+
+.kyc-doc-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--tap-min);
+  padding: 0 18px;
+  border: none;
+  border-bottom: 1px solid var(--kyc-border);
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.kyc-doc-row:last-child {
+  border-bottom: none;
+}
+
+.kyc-doc-row:hover,
+.kyc-doc-row.is-selected {
+  background: #f8f9ff;
+}
+
+.kyc-doc-row .kyc-chevron {
+  font-size: 1.25rem;
+  opacity: 0.5;
+}
+
+.kyc-help {
+  font-size: 0.8rem;
+  color: var(--kyc-muted);
+  line-height: 1.45;
+  margin: 0.75rem 0 1rem;
+}
+
+.kyc-footer {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--kyc-muted);
+  margin-top: 1.5rem;
+  padding-bottom: 8px;
+}
+
+/* ——— Passport NFC intro & scan ——— */
+.kyc-nfc-hero-card {
+  padding: 18px 16px 20px;
+}
+
+.kyc-nfc-hero-visual {
+  position: relative;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.kyc-nfc-hero-phone {
+  font-size: 3rem;
+  transform: rotate(-14deg);
+  z-index: 2;
+}
+
+.kyc-nfc-hero-passport {
+  font-size: 2.4rem;
+  margin-left: -12px;
+  transform: translateY(6px) rotate(6deg);
+  z-index: 1;
+}
+
+.kyc-nfc-hero-waves {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.kyc-nfc-hero-waves span {
+  position: absolute;
+  border: 2px solid rgba(67, 97, 238, 0.35);
+  border-radius: 50%;
+  animation: nfcHeroPulse 2.2s ease-out infinite;
+}
+
+.kyc-nfc-hero-waves span:nth-child(1) {
+  width: 48px;
+  height: 48px;
+  animation-delay: 0s;
+}
+.kyc-nfc-hero-waves span:nth-child(2) {
+  width: 72px;
+  height: 72px;
+  animation-delay: 0.25s;
+}
+.kyc-nfc-hero-waves span:nth-child(3) {
+  width: 96px;
+  height: 96px;
+  animation-delay: 0.5s;
+}
+
+@keyframes nfcHeroPulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+
+.kyc-nfc-hero-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--kyc-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.kyc-nfc-hero-list li {
+  margin-bottom: 0.35rem;
+}
+
+.kyc-nfc-scan {
+  margin: -20px -16px calc(-24px - env(safe-area-inset-bottom, 0px));
+  min-height: calc(100dvh - var(--nav-h));
+  background: linear-gradient(180deg, #0f1020 0%, #1a1a2e 100%);
+  color: #f4f4f5;
+  padding: 12px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.kyc-nfc-scan-close {
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+
+.kyc-nfc-scan-stage {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin: 24px 0 20px;
+}
+
+.kyc-nfc-scan-waves {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kyc-nfc-scan-wave {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgba(129, 140, 248, 0.55);
+  animation: nfcScanRing 2s ease-out infinite;
+}
+
+.kyc-nfc-scan-wave--1 {
+  width: 60px;
+  height: 60px;
+  animation-delay: 0s;
+}
+.kyc-nfc-scan-wave--2 {
+  width: 100px;
+  height: 100px;
+  animation-delay: 0.35s;
+}
+.kyc-nfc-scan-wave--3 {
+  width: 160px;
+  height: 160px;
+  animation-delay: 0.7s;
+}
+
+@keyframes nfcScanRing {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+}
+
+.kyc-nfc-scan-passport {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 4rem;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
+}
+
+.kyc-nfc-scan-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  max-width: 300px;
+}
+
+.kyc-nfc-scan-sub {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #a5b4fc;
+  margin: 0 0 24px;
+  max-width: 320px;
+}
+
+.kyc-nfc-scan-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 320px;
+  text-align: left;
+}
+
+.kyc-nfc-scan-checklist li {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.92rem;
+  color: #c7d2fe;
+  transition: background 0.25s, color 0.25s;
+}
+
+.kyc-nfc-scan-checklist li.is-done {
+  background: rgba(52, 211, 153, 0.15);
+  color: #a7f3d0;
+}
+
+.kyc-nfc-scan-done {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  color: #86efac;
+}
+
+.kyc-progress-face--passport {
+  background: linear-gradient(135deg, #312e81, #4338ca);
+  font-size: 1.75rem;
+}
+
+/* ——— Capture (legacy / unused) ——— */
+.kyc-capture {
+  margin: -20px -16px -24px;
+  min-height: calc(100dvh - var(--nav-h));
+  background: #0c0c10;
+  display: flex;
+  flex-direction: column;
+}
+
+.kyc-capture-top {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 12px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.kyc-icon-btn {
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.15rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kyc-flash-on {
+  filter: drop-shadow(0 0 6px #fde047);
+}
+
+.kyc-viewfinder {
+  flex: 1;
+  position: relative;
+  margin: 8px 16px 0;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 240px;
+}
+
+.kyc-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.kyc-viewfinder.has-stream .kyc-video {
+  opacity: 1;
+}
+
+.kyc-viewfinder-placeholder {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(145deg, #1e1e2e, #12121a);
+  z-index: 0;
+}
+
+.kyc-doc-frame {
+  position: absolute;
+  inset: 10%;
+  border: 3px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+}
+
+.kyc-bottom-sheet {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom, 0px));
+  margin-top: auto;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.25);
+}
+
+.kyc-sheet-title {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.kyc-sheet-sub {
+  margin: 0 0 10px;
+  color: var(--kyc-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.kyc-link-btn {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-bottom: 8px;
+  border: none;
+  background: none;
+  color: var(--kyc-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.kyc-guidance {
+  font-size: 0.85rem;
+  color: var(--kyc-muted);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+/* ——— Overview ——— */
+.kyc-overview {
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.kyc-toasts {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.kyc-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: var(--kyc-shadow);
+  animation: toastIn 0.35s ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.kyc-toast--ok {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.kyc-toast--pending {
+  background: #eff6ff;
+  color: var(--kyc-primary);
+  border: 1px solid #bfdbfe;
+}
+
+.kyc-toast-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  background: #fff;
+}
+
+.kyc-overview-card {
+  padding: 20px 18px;
+  margin-top: 52px;
+}
+
+.kyc-overview-head {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.kyc-overview-sub {
+  margin: 0 0 16px;
+  color: var(--kyc-muted);
+  font-size: 0.9rem;
+}
+
+.kyc-step-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kyc-step-row {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--kyc-border);
+}
+
+.kyc-step-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.kyc-step-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.kyc-step-icon--done {
+  background: #d1fae5;
+}
+
+.kyc-step-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.kyc-step-meta {
+  font-size: 0.8rem;
+  color: var(--kyc-muted);
+  margin-top: 2px;
+}
+
+.kyc-progress-card {
+  padding: 18px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.kyc-progress-face {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.kyc-status-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kyc-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.kyc-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.kyc-pill--approved {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.kyc-pill--progress {
+  background: #dbeafe;
+  color: var(--kyc-primary);
+}
+
+.kyc-nfc-card {
+  padding: 20px 18px;
+  text-align: center;
+}
+
+.kyc-nfc-illus {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  height: 72px;
+}
+
+.kyc-nfc-phone {
+  font-size: 2.5rem;
+  transform: rotate(-12deg);
+}
+
+.kyc-nfc-doc {
+  font-size: 2rem;
+  transform: translateY(4px);
+}
+
+.kyc-nfc-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.kyc-nfc-sub {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--kyc-muted);
+  line-height: 1.5;
+}
+
+/* ——— Wallet flow ——— */
+.wallet-root {
+  min-height: calc(100dvh - var(--nav-h));
+  padding: 16px 12px 24px;
+  background: var(--wallet-bg);
+  color: var(--wallet-text);
+}
+
+.wallet-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.wallet-tab {
+  flex: 1;
+  min-height: var(--tap-min);
+  border-radius: 14px;
+  border: 1px solid #2a2a3d;
+  background: #1a1a28;
+  color: var(--wallet-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.wallet-tab.is-active {
+  background: #2a2a3d;
+  color: #fff;
+  border-color: #4361ee;
+}
+
+.wallet-carousel {
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.wallet-carousel-track {
+  display: flex;
+  width: 200%;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wallet-carousel-track.is-second {
+  transform: translateX(-50%);
+}
+
+.wallet-carousel-slide {
+  width: 50%;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.wallet-slide-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--wallet-muted);
+  margin: 0 0 10px 4px;
+}
+
+.wallet-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--wallet-muted);
+  margin-top: 16px;
+}
+
+.wallet-nfc {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin: 8px auto 16px;
+}
+
+.wallet-nfc-circle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4361ee;
+  z-index: 2;
+}
+
+.wallet-nfc-wave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(67, 97, 238, 0.5);
+  border-radius: 50%;
+  opacity: 0;
+  animation: nfcPulse 2.4s ease-out infinite;
+}
+
+.wallet-nfc-wave--1 {
+  width: 28px;
+  height: 28px;
+  animation-delay: 0s;
+}
+.wallet-nfc-wave--2 {
+  width: 42px;
+  height: 42px;
+  animation-delay: 0.3s;
+}
+.wallet-nfc-wave--3 {
+  width: 56px;
+  height: 56px;
+  animation-delay: 0.6s;
+}
+
+@keyframes nfcPulse {
+  0% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+}
+
+.wallet-pass {
+  border-radius: 20px;
+  padding: 14px 14px 0;
+  max-width: 100%;
+}
+
+.wallet-pass--dark .wallet-pass-body {
+  background: linear-gradient(180deg, #252536 0%, #1a1a28 100%);
+  border: 1px solid #2e2e42;
+}
+
+.wallet-pass--light .wallet-pass-body--light {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+}
+
+.wallet-pass-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px 4px;
+}
+
+.wallet-pass-top--light .wallet-issuer-name--dark {
+  color: #f4f4f5;
+}
+
+.wallet-issuer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wallet-issuer-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4361ee, #7c3aed);
+}
+
+.wallet-issuer-logo--orange {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.wallet-issuer-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #d4d4d8;
+}
+
+.wallet-actions {
+  display: flex;
+  gap: 14px;
+  color: #a1a1aa;
+  font-size: 1rem;
+}
+
+.wallet-action {
+  cursor: default;
+}
+
+.wallet-pass-body {
+  border-radius: 20px;
+  padding: 16px 16px 0;
+  overflow: hidden;
+}
+
+.wallet-pass-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wallet-mini-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4361ee;
+}
+
+.wallet-mini-logo--orange {
+  background: #f97316;
+}
+
+.wallet-program-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a1a1aa;
+}
+
+.wallet-program-label--dark {
+  color: #6b7280;
+}
+
+.wallet-divider {
+  border: none;
+  border-top: 1px solid #3f3f55;
+  margin: 12px 0;
+}
+
+.wallet-divider--light {
+  border-top-color: #e5e7eb;
+}
+
+.wallet-program-title {
+  margin: 0 0 14px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.wallet-program-title--dark {
+  color: #111827;
+}
+
+.wallet-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.wallet-stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #71717a;
+}
+
+.wallet-stat-label--muted {
+  color: #9ca3af;
+}
+
+.wallet-stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.wallet-stat-value--dark {
+  color: #111827;
+}
+
+.wallet-card-art {
+  height: 120px;
+  margin: 0 -16px 0;
+  border-radius: 0 0 18px 18px;
+}
+
+.wallet-card-art--geo {
+  background: linear-gradient(125deg, #4361ee 0%, #7c3aed 40%, #ec4899 100%);
+  opacity: 0.95;
+}
+
+.wallet-card-art--warm {
+  background: linear-gradient(120deg, #fed7aa, #fb923c, #ea580c);
+  height: 100px;
+}
+
+.wallet-hero-banner {
+  height: 88px;
+  margin: -16px -16px 12px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, #fff7ed, #ffedd5, #fdba74);
+}
+
+.wallet-hero-banner--passport {
+  background: linear-gradient(100deg, #e0e7ff, #c7d2fe, #93c5fd);
+}
+
+.wallet-pass--light .wallet-pass-top--light {
+  padding-bottom: 8px;
+}
