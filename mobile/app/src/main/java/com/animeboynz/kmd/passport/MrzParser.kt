@@ -1,15 +1,36 @@
 package com.animeboynz.kmd.passport
 
+import android.graphics.Rect
+import com.google.mlkit.vision.text.Text
 import org.jmrtd.lds.icao.MRZInfo
 
 /**
  * Parses TD3 MRZ from noisy OCR text and validates ICAO check digits on line 2.
+ *
+ * Extraction prefers ML Kit line geometry + strict TD3 patterns (similar idea to
+ * [AndroidPassportReader](https://github.com/jllarraz/AndroidPassportReader)) instead of sliding
+ * a window over the entire flattened OCR string, which picks up random text from the visa page.
  */
 object MrzParser {
 
     private const val LINE_LEN = Td3Mrz.MRZ_LINE_LENGTH
 
     private val mrzCharRegex = Regex("^[A-Z0-9<]{44}$")
+
+    /** TD3 line 1: document code (2) + issuer (3) + name field (39). */
+    private val td3Line1Regex = Regex(
+        "^[PIVAC][A-Z0-9<][A-Z<]{3}[A-Z0-9<]{39}$",
+    )
+
+    /**
+     * TD3 line 2 layout (44 chars), allowing `<` as printed substitute for check digit 0.
+     * Mirrors the strict pattern used in AndroidPassportReader's [MRZUtil].
+     */
+    private val td3Line2Regex = Regex(
+        "^[A-Z0-9<]{9}[0-9<][A-Z<]{3}[0-9]{6}[0-9<][FM<][0-9]{6}[0-9<][A-Z0-9<]{14}[0-9<][0-9<]$",
+    )
+
+    private data class OcrLine(val raw: String, val top: Int, val left: Int)
 
     /** Map OCR confusions toward MRZ alphabet. */
     fun normalizeMrzLine(raw: String): String {
@@ -24,49 +45,52 @@ object MrzParser {
     fun parseMrzInfo(mrz: Td3Mrz): MRZInfo = MRZInfo(mrz.combined)
 
     /**
-     * Extracts a TD3 MRZ from flat OCR text by scanning for two plausible 44-char lines.
+     * Best entry point: uses ML Kit [Text] lines in reading order (top-to-bottom) and only joins
+     * neighbouring lines, so unrelated passport text rarely forms a false 88-character MRZ.
+     */
+    fun extractTd3FromMlKit(text: Text): Td3Mrz? {
+        val lines = collectSortedLines(text)
+        if (lines.isEmpty()) return null
+
+        // 1) Each line alone (sliding window up to 44 inside long noisy strings)
+        for (line in lines) {
+            extractFromSingleStrip(stripToMrzAlphabet(line.raw))?.let { return it }
+        }
+
+        // 2) Join 2–3 consecutive lines (MRZ sometimes split across baselines)
+        for (i in lines.indices) {
+            for (span in 2..3) {
+                val end = i + span - 1
+                if (end > lines.lastIndex) break
+                if (!areLinesVisuallyAdjacent(lines, i, end)) continue
+                val merged = lines.subList(i, end + 1).joinToString("") { stripToMrzAlphabet(it.raw) }
+                extractFromMergedStrip(merged)?.let { return it }
+            }
+        }
+
+        // 3) Text from blocks biased toward bottom of the frame (MRZ strip)
+        val bottomSnippet = buildBottomWeightedSnippet(text)
+        extractFromMergedStrip(bottomSnippet)?.let { return it }
+
+        return null
+    }
+
+    /**
+     * Legacy flat OCR: only scans the tail of the string (MRZ is usually last in reading order)
+     * plus per-line attempts, to avoid matching random 44-char slices from the name / headers.
      */
     fun extractTd3FromOcr(ocrText: String): Td3Mrz? {
-        val cleaned = ocrText.uppercase()
-            .replace("\n", "")
-            .replace("\r", "")
-            .replace(" ", "")
+        val cleaned = stripToMrzAlphabet(
+            ocrText.uppercase()
+                .replace("\n", "")
+                .replace("\r", "")
+                .replace(" ", ""),
+        )
+        val tail = cleaned.takeLast(minOf(cleaned.length, 900))
+        extractFromMergedStrip(tail)?.let { return it }
 
-        val line1Starts = mutableListOf<Pair<Int, String>>()
-        var i = 0
-        while (i + LINE_LEN <= cleaned.length) {
-            val slice = cleaned.substring(i, i + LINE_LEN)
-            if (slice.matches(mrzCharRegex) && looksLikeTd3Line1(slice)) {
-                line1Starts.add(i to slice)
-            }
-            i++
-        }
-
-        for ((start, line1) in line1Starts) {
-            val restStart = start + LINE_LEN
-            if (restStart + LINE_LEN > cleaned.length) continue
-            val line2 = cleaned.substring(restStart, restStart + LINE_LEN)
-            if (!line2.matches(mrzCharRegex)) continue
-            if (!line2Checks(line2)) continue
-            val mrz = Td3Mrz(line1 = line1, line2 = line2)
-            if (runCatching { MRZInfo(mrz.combined) }.isSuccess) {
-                return mrz
-            }
-        }
-
-        val lines = ocrText.lines()
-            .map { normalizeMrzLine(it) }
-            .filter { it.length == LINE_LEN && it.matches(mrzCharRegex) }
-
-        for (a in lines.indices) {
-            for (b in a + 1 until lines.size) {
-                val line1 = lines[a]
-                val line2 = lines[b]
-                if (!looksLikeTd3Line1(line1)) continue
-                if (!line2Checks(line2)) continue
-                val mrz = Td3Mrz(line1, line2)
-                if (runCatching { MRZInfo(mrz.combined) }.isSuccess) return mrz
-            }
+        for (line in ocrText.lines()) {
+            extractFromMergedStrip(stripToMrzAlphabet(line))?.let { return it }
         }
 
         return null
@@ -81,19 +105,115 @@ object MrzParser {
         if (!line2.matches(mrzCharRegex)) {
             return Result.failure(IllegalArgumentException("Line 2 must be exactly $LINE_LEN MRZ characters"))
         }
-        if (!looksLikeTd3Line1(line1)) {
+        val l1 = applyOcrCorrectionsLine1(line1)
+        val l2 = applyOcrCorrectionsLine2(line2)
+        if (!looksLikeTd3Line1Strict(l1)) {
             return Result.failure(IllegalArgumentException("Line 1 does not look like a passport MRZ"))
         }
-        if (!line2Checks(line2)) {
+        if (!line2Checks(l2)) {
             return Result.failure(IllegalArgumentException("MRZ check digits failed — fix OCR errors or re-scan"))
         }
-        return runCatching { Td3Mrz(line1, line2).also { MRZInfo(it.combined) } }
+        return runCatching { Td3Mrz(l1, l2).also { MRZInfo(it.combined) } }
     }
 
-    private fun looksLikeTd3Line1(line: String): Boolean {
+    private fun collectSortedLines(text: Text): List<OcrLine> {
+        val out = ArrayList<OcrLine>(32)
+        for (block in text.textBlocks) {
+            for (line in block.lines) {
+                val rect: Rect = line.boundingBox ?: continue
+                val t = line.text?.trim().orEmpty()
+                if (t.isNotEmpty()) {
+                    out.add(OcrLine(t, rect.top, rect.left))
+                }
+            }
+        }
+        out.sortWith(compareBy({ it.top }, { it.left }))
+        return out
+    }
+
+    private fun areLinesVisuallyAdjacent(lines: List<OcrLine>, from: Int, to: Int): Boolean {
+        if (from >= to) return true
+        var maxH = 1
+        for (i in from..to) {
+            maxH = maxOf(maxH, estimateLineHeight(lines, i))
+        }
+        val gapLimit = (maxH * 2.2f).toInt().coerceAtLeast(28)
+        for (i in from until to) {
+            if (lines[i + 1].top - lines[i].top > gapLimit) return false
+        }
+        return true
+    }
+
+    private fun estimateLineHeight(lines: List<OcrLine>, index: Int): Int {
+        val cur = lines.getOrNull(index) ?: return 20
+        val next = lines.getOrNull(index + 1)
+        val prev = lines.getOrNull(index - 1)
+        val d1 = next?.let { (it.top - cur.top).coerceAtLeast(12) }
+        val d2 = prev?.let { (cur.top - it.top).coerceAtLeast(12) }
+        return listOfNotNull(d1, d2).minOrNull() ?: 24
+    }
+
+    private fun buildBottomWeightedSnippet(text: Text, maxChars: Int = 320): String {
+        data class BlockSnippet(val top: Int, val text: String)
+        val blocks = ArrayList<BlockSnippet>(text.textBlocks.size)
+        for (block in text.textBlocks) {
+            val box = block.boundingBox ?: continue
+            val t = block.text?.let { stripToMrzAlphabet(it) }.orEmpty()
+            if (t.isNotEmpty()) blocks.add(BlockSnippet(box.top, t))
+        }
+        if (blocks.isEmpty()) return ""
+        val maxTop = blocks.maxOf { it.top }
+        blocks.sortByDescending { it.top }
+        val sb = StringBuilder()
+        for (b in blocks) {
+            if (b.top < maxTop - maxTop / 3) continue
+            sb.append(b.text)
+            if (sb.length >= maxChars) break
+        }
+        return sb.toString().take(maxChars)
+    }
+
+    private fun stripToMrzAlphabet(s: String): String {
+        return s.uppercase()
+            .asSequence()
+            .filter { it.isLetterOrDigit() || it == '<' }
+            .joinToString("")
+    }
+
+    /** Contiguous TD3 (88 chars) inside one OCR line, or line1 immediately followed by line2. */
+    private fun extractFromSingleStrip(strip: String): Td3Mrz? {
+        extractFromMergedStrip(strip)?.let { return it }
+        return null
+    }
+
+    private fun extractFromMergedStrip(strip: String): Td3Mrz? {
+        if (strip.length < LINE_LEN * 2) return null
+        for (i in 0..strip.length - LINE_LEN * 2) {
+            val raw1 = strip.substring(i, i + LINE_LEN)
+            val raw2 = strip.substring(i + LINE_LEN, i + LINE_LEN * 2)
+            if (!raw1.matches(mrzCharRegex) || !raw2.matches(mrzCharRegex)) continue
+            val l1 = applyOcrCorrectionsLine1(raw1)
+            val l2 = applyOcrCorrectionsLine2(raw2)
+            if (!td3Line1Regex.matches(l1)) continue
+            if (!td3Line2Regex.matches(l2)) continue
+            if (!looksLikeTd3Line1Strict(l1)) continue
+            if (!line2Checks(l2)) continue
+            if (validatePair(l1, l2)) return Td3Mrz(l1, l2)
+        }
+        return null
+    }
+
+    private fun validatePair(line1: String, line2: String): Boolean {
+        return runCatching {
+            MRZInfo(line1 + line2)
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun looksLikeTd3Line1Strict(line: String): Boolean {
         if (line.length != LINE_LEN) return false
         if (line[0] !in "PIVAC") return false
-        return true
+        return td3Line1Regex.matches(line)
     }
 
     private fun line2Checks(line: String): Boolean {
@@ -107,8 +227,6 @@ object MrzParser {
         val exp = line.substring(21, 27)
         val expCd = normalizeMrzCheckDigit(line[27])
         if (computeCheckDigit(exp) != expCd) return false
-        // TD3 line 2 (ICAO / JMRTD): indices 28–41 = 14-char personal/optional field; [42] = its check
-        // digit; [43] = composite check digit over doc+dob+expiry blocks + 14-char personal (no personal check).
         val personal = line.substring(28, 42)
         val personalCd = normalizeMrzCheckDigit(line[42])
         if (computeCheckDigit(personal) != personalCd) return false
@@ -136,5 +254,55 @@ object MrzParser {
             sum += mrzCharValue(ch) * weights[idx % 3]
         }
         return ('0'.code + (sum % 10)).toChar()
+    }
+
+    /** Issuing state (chars 2–4) is alpha; OCR often reads O as 0 etc. */
+    private fun applyOcrCorrectionsLine1(line: String): String {
+        if (line.length != LINE_LEN) return line
+        val group1 = line.substring(0, 2)
+        var group2 = line.substring(2, 5)
+        val group3 = line.substring(5, LINE_LEN)
+        group2 = replaceDigitsWithLettersForState(group2)
+        return group1 + group2 + group3
+    }
+
+    private fun applyOcrCorrectionsLine2(line: String): String {
+        if (line.length != LINE_LEN) return line
+        val group1 = line.substring(0, 9)
+        var g2 = line.substring(9, 10)
+        var g3 = line.substring(10, 13)
+        var g4 = line.substring(13, 19)
+        var g5 = line.substring(19, 20)
+        val g6 = line.substring(20, 21)
+        var g7 = line.substring(21, 27)
+        var g8 = line.substring(27, 28)
+        val g9 = line.substring(28, 42)
+        var g10 = line.substring(42, 43)
+        var g11 = line.substring(43, 44)
+        g2 = replaceLettersWithDigitsForChecks(g2)
+        g3 = replaceDigitsWithLettersForState(g3)
+        g4 = replaceLettersWithDigitsForChecks(g4)
+        g5 = replaceLettersWithDigitsForChecks(g5)
+        g7 = replaceLettersWithDigitsForChecks(g7)
+        g8 = replaceLettersWithDigitsForChecks(g8)
+        g10 = replaceLettersWithDigitsForChecks(g10)
+        g11 = replaceLettersWithDigitsForChecks(g11)
+        return group1 + g2 + g3 + g4 + g5 + g6 + g7 + g8 + g9 + g10 + g11
+    }
+
+    private fun replaceDigitsWithLettersForState(str: String): String {
+        return str
+            .replace('0', 'O')
+            .replace('1', 'I')
+            .replace('2', 'Z')
+            .replace('5', 'S')
+    }
+
+    private fun replaceLettersWithDigitsForChecks(str: String): String {
+        return str
+            .replace('O', '0')
+            .replace('I', '1')
+            .replace('Z', '2')
+            .replace('S', '5')
     }
 }

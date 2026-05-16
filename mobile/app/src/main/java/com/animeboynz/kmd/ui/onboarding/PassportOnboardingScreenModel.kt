@@ -1,10 +1,8 @@
 package com.animeboynz.kmd.ui.onboarding
 
-import android.graphics.Bitmap
 import android.nfc.Tag
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import com.animeboynz.kmd.passport.MrzOcr
 import com.animeboynz.kmd.passport.MrzParser
 import com.animeboynz.kmd.passport.PassportChipSummary
 import com.animeboynz.kmd.passport.PassportNfcReader
@@ -15,7 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class PassportOnboardingScreenModel(
     private val generalPreferences: GeneralPreferences,
@@ -86,21 +83,10 @@ class PassportOnboardingScreenModel(
         )
     }
 
-    fun onPhotoCaptured(bitmap: Bitmap) {
-        screenModelScope.launch {
-            _state.value = State.ScanPhoto
-            val mrz = withContext(Dispatchers.Default) {
-                val text = runCatching { MrzOcr.recognizeBlocking(bitmap) }.getOrNull().orEmpty()
-                MrzParser.extractTd3FromOcr(text)
-            }
-            if (mrz != null) {
+    fun onMrzDetectedFromCamera(mrz: Td3Mrz) {
+        screenModelScope.launch(Dispatchers.Main.immediate) {
+            if (_state.value is State.ScanPhoto) {
                 _state.value = State.ReviewMrz(mrz)
-            } else {
-                _state.value = State.ManualMrz(
-                    line1 = "",
-                    line2 = "",
-                    error = "Could not read MRZ. Enter both lines manually.",
-                )
             }
         }
     }

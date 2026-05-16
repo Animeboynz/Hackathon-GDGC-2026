@@ -1,31 +1,33 @@
 package com.animeboynz.kmd.ui.onboarding
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
+import android.os.SystemClock
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -41,7 +43,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
@@ -54,6 +58,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.animeboynz.kmd.R
 import com.animeboynz.kmd.nfc.NfcTagDispatcher
+import com.animeboynz.kmd.passport.MrzLiveFrameProcessor
 import com.animeboynz.kmd.passport.PassportChipSummary
 import com.animeboynz.kmd.passport.Td3Mrz
 import com.animeboynz.kmd.preferences.GeneralPreferences
@@ -61,8 +66,8 @@ import com.animeboynz.kmd.presentation.Screen
 import com.animeboynz.kmd.ui.home.HomeScreen
 import org.jmrtd.lds.icao.MRZInfo
 import org.koin.compose.koinInject
-import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 object PassportOnboardingScreen : Screen() {
     private fun readResolve(): Any = PassportOnboardingScreen
@@ -112,7 +117,7 @@ object PassportOnboardingScreen : Screen() {
                     )
 
                     is PassportOnboardingScreenModel.State.ScanPhoto -> PassportCameraStep(
-                        onCaptured = { screenModel.onPhotoCaptured(it) },
+                        onMrzFound = { screenModel.onMrzDetectedFromCamera(it) },
                         onManualInstead = { screenModel.openManualEntry() },
                     )
 
@@ -173,11 +178,13 @@ private fun WelcomeStep(
 
 @Composable
 private fun PassportCameraStep(
-    onCaptured: (android.graphics.Bitmap) -> Unit,
+    onMrzFound: (Td3Mrz) -> Unit,
     onManualInstead: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
+
     val previewView = remember {
         PreviewView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -187,7 +194,14 @@ private fun PassportCameraStep(
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
-    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+
+    val analysisExecutor = remember {
+        Executors.newSingleThreadExecutor { r ->
+            Thread(r, "passport-mrz").apply { isDaemon = true }
+        }
+    }
+    val lastFrameProcessedMs = remember { AtomicLong(0L) }
+
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -211,11 +225,30 @@ private fun PassportCameraStep(
             return@DisposableEffect onDispose { }
         }
         val future = ProcessCameraProvider.getInstance(context)
-        val mainExecutor = ContextCompat.getMainExecutor(context)
-        val capture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+        val bindExecutor = ContextCompat.getMainExecutor(context)
+        val analysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
-        imageCapture = capture
+
+        analysis.setAnalyzer(analysisExecutor) { imageProxy ->
+            val now = SystemClock.elapsedRealtime()
+            val prev = lastFrameProcessedMs.get()
+            if (now - prev < MRZ_FRAME_MIN_INTERVAL_MS) {
+                imageProxy.close()
+                return@setAnalyzer
+            }
+            lastFrameProcessedMs.set(now)
+
+            val mrz = try {
+                MrzLiveFrameProcessor.scan(imageProxy)
+            } finally {
+                imageProxy.close()
+            }
+            if (mrz != null) {
+                mainExecutor.execute { onMrzFound(mrz) }
+            }
+        }
+
         future.addListener(
             {
                 try {
@@ -228,16 +261,17 @@ private fun PassportCameraStep(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
-                        capture,
+                        analysis,
                     )
                 } catch (_: Exception) {
                 }
             },
-            mainExecutor,
+            bindExecutor,
         )
         onDispose {
-            imageCapture = null
-            mainExecutor.execute {
+            analysis.clearAnalyzer()
+            analysisExecutor.shutdownNow()
+            bindExecutor.execute {
                 try {
                     if (future.isDone) {
                         future.get().unbindAll()
@@ -258,35 +292,18 @@ private fun PassportCameraStep(
             factory = { previewView },
         )
 
-        Button(
-            onClick = {
-                val capture = imageCapture ?: return@Button
-                val file = File(context.cacheDir, "passport_mrz_${System.currentTimeMillis()}.jpg")
-                val output = ImageCapture.OutputFileOptions.Builder(file).build()
-                val executor = Executors.newSingleThreadExecutor()
-                capture.takePicture(
-                    output,
-                    executor,
-                    object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                            val bmp = BitmapFactory.decodeFile(file.absolutePath)
-                            if (bmp != null) {
-                                ContextCompat.getMainExecutor(context).execute {
-                                    onCaptured(bmp)
-                                }
-                            }
-                            file.delete()
-                        }
-
-                        override fun onError(exception: ImageCaptureException) {
-                            file.delete()
-                        }
-                    },
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(context.getString(R.string.passport_onboarding_capture))
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+            Text(
+                text = context.getString(R.string.passport_onboarding_scanning_mrz),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     } else {
         Text(text = context.getString(R.string.passport_onboarding_camera_denied))
@@ -296,6 +313,8 @@ private fun PassportCameraStep(
         Text(context.getString(R.string.passport_onboarding_enter_mrz_manual))
     }
 }
+
+private const val MRZ_FRAME_MIN_INTERVAL_MS = 280L
 
 @Composable
 private fun ReviewMrzStep(
@@ -380,6 +399,20 @@ private fun ChipResultStep(
         text = context.getString(R.string.passport_onboarding_chip_success),
         style = MaterialTheme.typography.titleMedium,
     )
+    summary.portrait?.let { bmp ->
+        Text(
+            text = context.getString(R.string.passport_onboarding_chip_portrait),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = context.getString(R.string.passport_onboarding_chip_portrait),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+        )
+    }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             KeyValueRow(context.getString(R.string.passport_field_names), displayName)
