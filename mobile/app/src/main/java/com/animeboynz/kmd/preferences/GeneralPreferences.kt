@@ -20,4 +20,8 @@ class GeneralPreferences(preferenceStore: PreferenceStore) {
     val digitalIdExpiry = preferenceStore.getString("digital_id_expiry", "2030-01-01")
     val digitalIdCredentialId = preferenceStore.getString("digital_id_credential_id", "EID-4729")
     val digitalIdPortraitBase64 = preferenceStore.getString("digital_id_portrait_base64", "")
+    val digitalIdPublicKeyBase64 = preferenceStore.getString("digital_id_public_key_base64", "")
+    val digitalIdPrivateKeyBase64 = preferenceStore.getString("digital_id_private_key_base64", "")
+    val digitalIdReliability = preferenceStore.getLong("digital_id_reliability", 0L)
+    val digitalIdVerificationSources = preferenceStore.getString("digital_id_verification_sources", "Passport NFC")
 }

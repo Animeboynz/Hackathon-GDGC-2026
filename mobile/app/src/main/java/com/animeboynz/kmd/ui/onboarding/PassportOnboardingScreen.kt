@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.util.Base64
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -121,6 +123,11 @@ object PassportOnboardingScreen : Screen() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
         val nfcConsumerActive = state is PassportOnboardingScreenModel.State.WaitNfc
+        val canGoBack = screenModel.canGoBack()
+
+        BackHandler(enabled = canGoBack) {
+            screenModel.goBack()
+        }
 
         DisposableEffect(nfcConsumerActive) {
             if (nfcConsumerActive) {
@@ -147,6 +154,13 @@ object PassportOnboardingScreen : Screen() {
                 topBar = {
                     if (!isNfcWait) {
                         TopAppBar(
+                            navigationIcon = {
+                                if (canGoBack) {
+                                    IconButton(onClick = { screenModel.goBack() }) {
+                                        Text("‹", fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
+                                    }
+                                }
+                            },
                             title = {
                                 Text(
                                     text = context.getString(R.string.passport_onboarding_title),
@@ -165,7 +179,7 @@ object PassportOnboardingScreen : Screen() {
                     val s = state as PassportOnboardingScreenModel.State.WaitNfc
                     WaitNfcStep(
                         isReading = s.isReading,
-                        onBack = { screenModel.cancelWaitNfc() },
+                        onBack = { screenModel.goBack() },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding),
@@ -186,6 +200,26 @@ object PassportOnboardingScreen : Screen() {
                             is PassportOnboardingScreenModel.State.Welcome -> WelcomeStep(
                                 onStart = { screenModel.goToScan() },
                                 onManual = { screenModel.openManualEntry() },
+                                onDocuments = { screenModel.openDocumentOnboarding() },
+                            )
+
+                            is PassportOnboardingScreenModel.State.DocumentOnboarding -> DocumentEvidenceStep(
+                                name = s.name,
+                                dateOfBirth = s.dateOfBirth,
+                                submittedDocuments = s.submittedDocuments,
+                                selfieBase64 = s.selfieBase64,
+                                lastDocumentAction = s.lastDocumentAction,
+                                error = s.error,
+                                onName = screenModel::updateDocumentName,
+                                onDateOfBirth = screenModel::updateDocumentDateOfBirth,
+                                onDocumentSubmitted = screenModel::markDocumentSubmitted,
+                                onSelfieCaptured = screenModel::markDocumentSelfieCaptured,
+                                onCreateId = {
+                                    if (screenModel.completeDocumentDigitalId()) {
+                                        navigator.replaceAll(HomeScreen)
+                                    }
+                                },
+                                onBack = { screenModel.goBack() },
                             )
 
                             is PassportOnboardingScreenModel.State.ScanPhoto -> PassportDynamsoftScanStep(
@@ -206,7 +240,7 @@ object PassportOnboardingScreen : Screen() {
                                 onLine1 = screenModel::updateManualLine1,
                                 onLine2 = screenModel::updateManualLine2,
                                 onSubmit = { screenModel.submitManualMrz() },
-                                onBack = { screenModel.goToScan() },
+                                onBack = { screenModel.goBack() },
                             )
 
                             is PassportOnboardingScreenModel.State.WaitNfc -> Unit
@@ -218,7 +252,7 @@ object PassportOnboardingScreen : Screen() {
 
                             is PassportOnboardingScreenModel.State.SelfieCheck -> SelfieCheckStep(
                                 summary = s.summary,
-                                onBack = { screenModel.backToPassportSummary(s.summary) },
+                                onBack = { screenModel.goBack() },
                                 onFaceMatch = { screenModel.confirmSelfieMatch(s.summary) },
                             )
 
@@ -257,6 +291,7 @@ object PassportOnboardingScreen : Screen() {
 private fun VerificationProgress(state: PassportOnboardingScreenModel.State) {
     val progress = when (state) {
         PassportOnboardingScreenModel.State.Welcome -> 0.16f
+        is PassportOnboardingScreenModel.State.DocumentOnboarding -> 0.62f
         PassportOnboardingScreenModel.State.ScanPhoto -> 0.3f
         is PassportOnboardingScreenModel.State.ReviewMrz -> 0.38f
         is PassportOnboardingScreenModel.State.ManualMrz -> 0.3f
@@ -338,6 +373,7 @@ private fun KycSecondaryButton(text: String, onClick: () -> Unit, modifier: Modi
 private fun WelcomeStep(
     onStart: () -> Unit,
     onManual: () -> Unit,
+    onDocuments: () -> Unit,
 ) {
     val context = LocalContext.current
     Text(
@@ -378,12 +414,230 @@ private fun WelcomeStep(
     }
 
     KycPrimaryButton(text = context.getString(R.string.passport_onboarding_scan_photo), onClick = onStart)
+    KycSecondaryButton(text = "Create ID with other documents", onClick = onDocuments)
     TextButton(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
         Text(
             text = context.getString(R.string.passport_onboarding_enter_mrz_manual),
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
         )
+    }
+}
+
+@Composable
+private fun DocumentEvidenceStep(
+    name: String,
+    dateOfBirth: String,
+    submittedDocuments: Set<PassportOnboardingScreenModel.DocumentEvidence>,
+    selfieBase64: String,
+    lastDocumentAction: String?,
+    error: String?,
+    onName: (String) -> Unit,
+    onDateOfBirth: (String) -> Unit,
+    onDocumentSubmitted: (PassportOnboardingScreenModel.DocumentEvidence, String) -> Unit,
+    onSelfieCaptured: (Bitmap) -> Unit,
+    onCreateId: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    var activeDocument by remember { mutableStateOf<PassportOnboardingScreenModel.DocumentEvidence?>(null) }
+    var pendingCameraDocument by remember { mutableStateOf<PassportOnboardingScreenModel.DocumentEvidence?>(null) }
+    var pendingSelfieCapture by remember { mutableStateOf(false) }
+    val selfieBitmap = remember(selfieBase64) { selfieBase64.decodeBitmapOrNull() }
+    fun hasCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    }
+    val uploadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val document = activeDocument ?: return@rememberLauncherForActivityResult
+        if (uri != null) onDocumentSubmitted(document, "upload")
+    }
+    val documentCameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        val document = activeDocument ?: return@rememberLauncherForActivityResult
+        if (bitmap != null) onDocumentSubmitted(document, "camera")
+    }
+    val selfieCameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) onSelfieCaptured(bitmap)
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val document = pendingCameraDocument
+            if (document != null) {
+                activeDocument = document
+                documentCameraLauncher.launch(null)
+            } else if (pendingSelfieCapture) {
+                selfieCameraLauncher.launch(null)
+            }
+        }
+        pendingCameraDocument = null
+        pendingSelfieCapture = false
+    }
+    val estimatedReliability = submittedDocuments.maxOfOrNull { it.reliability } ?: 10L
+
+    Text(
+        text = "Create ID with documents",
+        style = MaterialTheme.typography.headlineLarge,
+        fontSize = 24.sp,
+    )
+    Text(
+        text = "If you do not have an NFC passport, add any supporting documents you have. Stronger documents produce a higher starting reliability score.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        lineHeight = 22.sp,
+    )
+
+    error?.let {
+        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+    }
+
+    OutlinedTextField(
+        value = name,
+        onValueChange = onName,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("Full legal name") },
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+    )
+    OutlinedTextField(
+        value = dateOfBirth,
+        onValueChange = onDateOfBirth,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("Date of birth") },
+        placeholder = { Text("DD/MM/YY") },
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+    )
+
+    KycElevatedCard {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(82.dp)
+                    .clip(CircleShape)
+                    .background(PassportKycColors.page)
+                    .border(3.dp, PassportKycColors.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selfieBitmap != null) {
+                    Image(
+                        bitmap = selfieBitmap.asImageBitmap(),
+                        contentDescription = "Profile selfie",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text("👤", fontSize = 36.sp)
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Profile photo", color = PassportKycColors.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    "Take a selfie to use as your digital ID profile photo.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    lineHeight = 18.sp,
+                )
+                OutlinedButton(
+                    onClick = {
+                        if (hasCameraPermission()) {
+                            selfieCameraLauncher.launch(null)
+                        } else {
+                            pendingSelfieCapture = true
+                            pendingCameraDocument = null
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text(if (selfieBase64.isBlank()) "Take selfie" else "Retake selfie")
+                }
+            }
+        }
+    }
+
+    KycElevatedCard {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Optional supporting documents", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            PassportOnboardingScreenModel.DocumentEvidence.entries.forEach { document ->
+                DocumentEvidenceRow(
+                    document = document,
+                    isSubmitted = document in submittedDocuments,
+                    onUpload = {
+                        activeDocument = document
+                        uploadLauncher.launch("*/*")
+                    },
+                    onCamera = {
+                        activeDocument = document
+                        if (hasCameraPermission()) {
+                            documentCameraLauncher.launch(null)
+                        } else {
+                            pendingCameraDocument = document
+                            pendingSelfieCapture = false
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    lastDocumentAction?.let {
+        Text(text = it, color = PassportKycColors.primary, fontWeight = FontWeight.SemiBold)
+    }
+
+    KycElevatedCard {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Reliability score", color = PassportKycColors.muted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("$estimatedReliability%", color = PassportKycColors.text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Only users verified by NFC passport scan can reach 100%. Community votes can adjust document-based scores later.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                lineHeight = 18.sp,
+            )
+        }
+    }
+
+    KycPrimaryButton(text = "Create digital ID", onClick = onCreateId)
+    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+        Text("Use passport scan instead", fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun DocumentEvidenceRow(
+    document: PassportOnboardingScreenModel.DocumentEvidence,
+    isSubmitted: Boolean,
+    onUpload: () -> Unit,
+    onCamera: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(PassportKycColors.page)
+            .border(1.dp, PassportKycColors.border, RoundedCornerShape(16.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column {
+                Text(document.label, color = PassportKycColors.text, fontWeight = FontWeight.Bold)
+                Text("Base score up to ${document.reliability}%", color = PassportKycColors.muted, fontSize = 12.sp)
+            }
+            Text(if (isSubmitted) "Added" else "Optional", color = if (isSubmitted) PassportKycColors.primary else PassportKycColors.muted)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onUpload, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
+                Text("Upload")
+            }
+            OutlinedButton(onClick = onCamera, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
+                Text("Photo")
+            }
+        }
     }
 }
 
@@ -614,10 +868,10 @@ private fun WaitNfcStep(
         IconButton(
             onClick = onBack,
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .padding(4.dp),
         ) {
-            Text("✕", color = Color(0xFFF4F4F5), fontSize = 18.sp)
+            Text("‹", color = Color(0xFFF4F4F5), fontSize = 32.sp)
         }
 
         Column(
@@ -1351,4 +1605,12 @@ private fun FatalNfcStep(
         }
     }
     KycPrimaryButton(text = context.getString(R.string.passport_onboarding_try_nfc_again), onClick = onRetry)
+}
+
+private fun String.decodeBitmapOrNull(): Bitmap? {
+    if (isBlank()) return null
+    return runCatching {
+        val bytes = Base64.decode(this, Base64.NO_WRAP)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }.getOrNull()
 }

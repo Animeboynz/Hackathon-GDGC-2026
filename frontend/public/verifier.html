@@ -289,7 +289,7 @@
         <div class="credential-inner">
           <img id="photo" class="photo hidden" alt="ID holder photo" />
           <div id="photoPlaceholder" class="photo photo-placeholder">👤</div>
-          <div class="pill">Verified</div>
+          <div id="validityPill" class="pill">Verified</div>
           <h2 id="holderName">Digital ID</h2>
           <p id="subtitle" class="credential-sub">Passport chip + photo + selfie</p>
 
@@ -334,27 +334,95 @@
         statusEl.style.background = ok ? "#f5dbe9" : "#fff";
       }
 
-      function normalisePayload(raw) {
+      function base64UrlToBytes(value) {
+        const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+        const binary = atob(base64);
+        return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      }
+
+      function bytesToText(bytes) {
+        return new TextDecoder().decode(bytes);
+      }
+
+      function derEcdsaToRaw(signature) {
+        let offset = 0;
+        if (signature[offset++] !== 0x30) throw new Error("Unsupported signature format");
+        const sequenceLength = signature[offset++];
+        if (sequenceLength + offset !== signature.length) throw new Error("Invalid signature length");
+        if (signature[offset++] !== 0x02) throw new Error("Invalid signature R value");
+        const rLength = signature[offset++];
+        const r = signature.slice(offset, offset + rLength);
+        offset += rLength;
+        if (signature[offset++] !== 0x02) throw new Error("Invalid signature S value");
+        const sLength = signature[offset++];
+        const s = signature.slice(offset, offset + sLength);
+
+        const normalise = (part) => {
+          const bytes = part[0] === 0 ? part.slice(1) : part;
+          const output = new Uint8Array(32);
+          output.set(bytes.slice(-32), 32 - Math.min(bytes.length, 32));
+          return output;
+        };
+
+        const raw = new Uint8Array(64);
+        raw.set(normalise(r), 0);
+        raw.set(normalise(s), 32);
+        return raw;
+      }
+
+      async function verifySignature(publicKeyBase64, encodedData, signatureBase64) {
+        const publicKey = await crypto.subtle.importKey(
+          "spki",
+          base64UrlToBytes(publicKeyBase64),
+          { name: "ECDSA", namedCurve: "P-256" },
+          false,
+          ["verify"],
+        );
+
+        return crypto.subtle.verify(
+          { name: "ECDSA", hash: "SHA-256" },
+          publicKey,
+          derEcdsaToRaw(base64UrlToBytes(signatureBase64)),
+          new TextEncoder().encode(encodedData),
+        );
+      }
+
+      async function normalisePayload(raw) {
         const data = JSON.parse(raw);
+        if (data.t !== "verid" || data.v < 2) {
+          throw new Error("This QR is not a signed VerID credential");
+        }
+
+        const verified = await verifySignature(data.pub, data.data, data.sig);
+        if (!verified) {
+          throw new Error("The QR signature could not be verified");
+        }
+
+        const fields = JSON.parse(bytesToText(base64UrlToBytes(data.data)));
+        const currentPeriod = Math.floor(Date.now() / 30000);
+        const timePeriod = typeof fields.tp === "number" ? fields.tp : -1;
+        const isExpired = timePeriod !== currentPeriod;
         return {
           raw: data,
           type: data.t || data.type || "verid",
-          name: data.n || data.name || data.holderName || "Unknown holder",
-          credentialId: data.cid || data.credentialId || "-",
-          documentNumber: data.doc || data.documentNumber || "-",
-          dateOfBirth: data.dob || data.dateOfBirth || "-",
-          method: data.m || data.method || data.verificationMethod || "QR",
-          imageBase64: data.img || data.photoBase64 || "",
+          name: fields.n || "Unknown holder",
+          credentialId: fields.cid || "-",
+          documentNumber: fields.doc || "-",
+          dateOfBirth: fields.dob || "-",
+          method: fields.m || "QR",
+          isExpired,
+          imageBase64: "",
         };
       }
 
       function renderCredential(decoded) {
+        document.getElementById("validityPill").textContent = decoded.isExpired ? "Expired ID" : "Verified";
         document.getElementById("holderName").textContent = decoded.name;
         document.getElementById("credentialId").textContent = decoded.credentialId;
         document.getElementById("documentNumber").textContent = decoded.documentNumber;
         document.getElementById("dateOfBirth").textContent = decoded.dateOfBirth;
         document.getElementById("method").textContent = decoded.method;
-        document.getElementById("subtitle").textContent = `${decoded.type} · ${decoded.method}`;
+        document.getElementById("subtitle").textContent = `${decoded.type} · ${decoded.method} · ${decoded.isExpired ? "expired" : "current"}`;
 
         if (decoded.imageBase64) {
           photoEl.src = `data:image/jpeg;base64,${decoded.imageBase64}`;
@@ -372,9 +440,9 @@
 
       async function onScanSuccess(decodedText) {
         try {
-          const decoded = normalisePayload(decodedText);
+          const decoded = await normalisePayload(decodedText);
           renderCredential(decoded);
-          setStatus("Digital ID decoded successfully.", true);
+          setStatus(decoded.isExpired ? "Digital ID signature verified, but this QR is expired." : "Digital ID signature verified successfully.", true);
           await scanner.stop();
         } catch (error) {
           setStatus(`Scanned QR, but it was not a valid VERID payload: ${error.message}`);

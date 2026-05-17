@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
 import android.util.Base64
-import android.util.Base64.NO_WRAP
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.PermIdentity
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -32,11 +32,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +60,7 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.animeboynz.kmd.R
 import com.animeboynz.kmd.crypto.VerIdCredentialCrypto
 import com.animeboynz.kmd.network.SupabaseUsersApi
+import com.animeboynz.kmd.nfc.NfcCredentialPayloadStore
 import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.animeboynz.kmd.presentation.util.Tab
 import com.animeboynz.kmd.ui.onboarding.PassportKycColors
@@ -68,19 +71,20 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.WriterException
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.google.zxing.qrcode.QRCodeWriter
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import org.koin.compose.koinInject
 
-object ToolsTab : Tab {
-    private fun readResolve(): Any = ToolsTab
+object MyQR : Tab {
+    private fun readResolve(): Any = MyQR
 
     override val options: TabOptions
         @Composable
         get() {
-            val image = rememberVectorPainter(Icons.Filled.Construction)
+            val image = rememberVectorPainter(Icons.Filled.PermIdentity)
             return TabOptions(
                 index = 0u,
-                title = stringResource(R.string.tools_tab),
+                title = stringResource(R.string.my_qr),
                 icon = image,
             )
         }
@@ -96,7 +100,7 @@ object ToolsTab : Tab {
                 containerColor = PassportKycColors.page,
                 topBar = {
                     TopAppBar(
-                        title = { Text(stringResource(R.string.tools_tab)) },
+                        title = { Text(stringResource(R.string.my_qr)) },
                         actions = {
                             IconButton(onClick = { navigator.push(PreferencesScreen) }) {
                                 Icon(Icons.Default.Settings, contentDescription = null)
@@ -119,7 +123,7 @@ object ToolsTab : Tab {
     }
 }
 
-private enum class ToolsVerificationMode {
+private enum class VerificationMode {
     QR,
     NFC,
 }
@@ -130,7 +134,7 @@ private fun VerificationPresenter(
     modifier: Modifier = Modifier,
 ) {
     val okHttpClient = koinInject<OkHttpClient>()
-    var mode by remember { mutableStateOf(ToolsVerificationMode.QR) }
+    var mode by remember { mutableStateOf(VerificationMode.QR) }
     val holderName = preferences.digitalIdHolderName.get()
     val credentialId = preferences.digitalIdCredentialId.get()
     val documentNumber = preferences.digitalIdDocumentNumber.get()
@@ -139,7 +143,9 @@ private fun VerificationPresenter(
     val portraitBase64 = preferences.digitalIdPortraitBase64.get()
     val portraitBitmap = remember(portraitBase64) { portraitBase64.decodeBitmapOrNull() }
     val signingKeys = remember { preferences.getOrCreateSigningKeys() }
-    val method = if (mode == ToolsVerificationMode.QR) "QR Verification" else "NFC Verification"
+    val method = if (mode == VerificationMode.QR) "QR Verification" else "NFC Verification"
+    var timePeriod by remember { mutableStateOf(currentVerIdTimePeriod()) }
+    var secondsRemaining by remember { mutableStateOf(secondsRemainingInCurrentPeriod()) }
 
     LaunchedEffect(signingKeys.publicKeyBase64) {
         SupabaseUsersApi.getReliabilityForPublicKey(okHttpClient, signingKeys.publicKeyBase64).fold(
@@ -153,15 +159,33 @@ private fun VerificationPresenter(
         )
     }
 
-    val qrPayload = remember(holderName, credentialId, documentNumber, dateOfBirth, reliability, signingKeys) {
+    LaunchedEffect(Unit) {
+        while (true) {
+            timePeriod = currentVerIdTimePeriod()
+            secondsRemaining = secondsRemainingInCurrentPeriod()
+            delay(1_000L)
+        }
+    }
+
+    val qrPayload = remember(holderName, credentialId, documentNumber, dateOfBirth, reliability, signingKeys, timePeriod) {
         buildQrPayload(
             holderName = holderName,
             credentialId = credentialId,
             documentNumber = documentNumber,
             dateOfBirth = dateOfBirth,
             reliability = reliability,
+            timePeriod = timePeriod,
             signingKeys = signingKeys,
         )
+    }
+
+    LaunchedEffect(mode, qrPayload) {
+        NfcCredentialPayloadStore.payload = if (mode == VerificationMode.NFC) qrPayload else null
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            NfcCredentialPayloadStore.payload = null
+        }
     }
 
     Column(modifier = modifier.padding(top = 16.dp, bottom = 24.dp)) {
@@ -189,11 +213,11 @@ private fun VerificationPresenter(
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            ModeButton("QR", mode == ToolsVerificationMode.QR, Modifier.weight(1f)) { mode = ToolsVerificationMode.QR }
-            ModeButton("NFC", mode == ToolsVerificationMode.NFC, Modifier.weight(1f)) { mode = ToolsVerificationMode.NFC }
+            ModeButton("QR", mode == VerificationMode.QR, Modifier.weight(1f)) { mode = VerificationMode.QR }
+            ModeButton("NFC", mode == VerificationMode.NFC, Modifier.weight(1f)) { mode = VerificationMode.NFC }
         }
 
-        if (mode == ToolsVerificationMode.QR) {
+        if (mode == VerificationMode.QR) {
             QrVerificationCard(
                 holderName = holderName,
                 credentialId = credentialId,
@@ -203,6 +227,7 @@ private fun VerificationPresenter(
                 portraitBitmap = portraitBitmap,
                 payload = qrPayload,
                 method = method,
+                secondsRemaining = secondsRemaining,
             )
         } else {
             NfcVerificationCard(
@@ -241,6 +266,7 @@ private fun QrVerificationCard(
     portraitBitmap: Bitmap?,
     payload: String,
     method: String,
+    secondsRemaining: Long,
 ) {
     val qrBitmap = remember(payload) { payload.toQrBitmap(size = 900) }
 
@@ -272,15 +298,32 @@ private fun QrVerificationCard(
                     .padding(vertical = 28.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(
-                    bitmap = qrBitmap.asImageBitmap(),
-                    contentDescription = "Digital ID QR code",
-                    modifier = Modifier
-                        .size(320.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White)
-                        .padding(10.dp),
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = "Digital ID QR code",
+                        modifier = Modifier
+                            .size(320.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color.White)
+                            .padding(10.dp),
+                    )
+                    LinearProgressIndicator(
+                        progress = { secondsRemaining / 30f },
+                        modifier = Modifier
+                            .fillMaxWidth(0.74f)
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                        color = PassportKycColors.primary,
+                        trackColor = Color.White,
+                    )
+                    Text(
+                        text = "Refreshes in ${secondsRemaining}s",
+                        color = PassportKycColors.muted,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
 
             InfoRow("Name", holderName)
@@ -288,6 +331,7 @@ private fun QrVerificationCard(
             InfoRow("Document", documentNumber)
             InfoRow("Date of birth", dateOfBirth)
             InfoRow("Reliability", "${reliability.coerceIn(0L, 100L)}%")
+            InfoRow("Expires in", "${secondsRemaining}s")
             InfoRow("QR security", "Signed with private key")
             InfoRow("Photo", "Not embedded in QR")
         }
@@ -391,10 +435,11 @@ private fun buildQrPayload(
     documentNumber: String,
     dateOfBirth: String,
     reliability: Long,
+    timePeriod: Long,
     signingKeys: VerIdCredentialCrypto.StoredKeyPair,
 ): String {
     val dataJson = """
-        {"n":"${holderName.jsonEscape()}","cid":"${credentialId.jsonEscape()}","doc":"${documentNumber.jsonEscape()}","dob":"${dateOfBirth.jsonEscape()}","m":"QR","rel":${reliability.coerceIn(0L, 100L)}}
+        {"n":"${holderName.jsonEscape()}","cid":"${credentialId.jsonEscape()}","doc":"${documentNumber.jsonEscape()}","dob":"${dateOfBirth.jsonEscape()}","m":"QR","rel":${reliability.coerceIn(0L, 100L)},"tp":$timePeriod}
     """.trimIndent()
     val encodedData = VerIdCredentialCrypto.encodeText(dataJson)
     val signature = VerIdCredentialCrypto.sign(signingKeys.privateKeyBase64, encodedData)
@@ -404,6 +449,12 @@ private fun buildQrPayload(
 }
 
 private fun String.jsonEscape(): String = replace("\\", "\\\\").replace("\"", "\\\"")
+
+private fun currentVerIdTimePeriod(): Long = System.currentTimeMillis() / 30_000L
+
+private fun secondsRemainingInCurrentPeriod(): Long {
+    return ((30_000L - (System.currentTimeMillis() % 30_000L)) / 1_000L).coerceIn(1L, 30L)
+}
 
 private fun GeneralPreferences.getOrCreateSigningKeys(): VerIdCredentialCrypto.StoredKeyPair {
     val publicKey = digitalIdPublicKeyBase64.get()

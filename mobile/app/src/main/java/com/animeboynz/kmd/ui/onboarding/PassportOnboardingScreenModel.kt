@@ -5,12 +5,13 @@ import android.nfc.Tag
 import android.util.Base64
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.animeboynz.kmd.crypto.VerIdCredentialCrypto
+import com.animeboynz.kmd.network.SupabaseUsersApi
 import com.animeboynz.kmd.passport.DynamsoftMrzMapper
 import com.animeboynz.kmd.passport.MrzParser
 import com.animeboynz.kmd.passport.PassportChipSummary
 import com.animeboynz.kmd.passport.PassportNfcReader
 import com.animeboynz.kmd.passport.Td3Mrz
-import com.animeboynz.kmd.network.SupabaseUsersApi
 import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.dynamsoft.mrzscannerbundle.ui.MRZScanResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +26,25 @@ class PassportOnboardingScreenModel(
     private val okHttpClient: OkHttpClient,
 ) : ScreenModel {
 
+    enum class DocumentEvidence(val label: String, val reliability: Long) {
+        Passport("Passport", 90L),
+        DriversLicence("Driver's Licence", 75L),
+        BirthCertificate("Birth Certificate", 65L),
+        BankStatement("Bank Statement", 45L),
+        MailedLetter("Mailed Letter", 30L),
+    }
+
     sealed class State {
         data object Welcome : State()
+
+        data class DocumentOnboarding(
+            val name: String = "",
+            val dateOfBirth: String = "",
+            val submittedDocuments: Set<DocumentEvidence> = emptySet(),
+            val selfieBase64: String = "",
+            val lastDocumentAction: String? = null,
+            val error: String? = null,
+        ) : State()
 
         data object ScanPhoto : State()
 
@@ -67,8 +85,103 @@ class PassportOnboardingScreenModel(
 
     private var lastMrzForNfc: Td3Mrz? = null
 
+    fun canGoBack(): Boolean = _state.value !is State.Welcome
+
+    fun goBack(): Boolean {
+        when (val s = _state.value) {
+            is State.Welcome -> return false
+            is State.DocumentOnboarding -> _state.value = State.Welcome
+            is State.ScanPhoto -> _state.value = State.Welcome
+            is State.ReviewMrz -> _state.value = State.ScanPhoto
+            is State.ManualMrz -> _state.value = State.ScanPhoto
+            is State.WaitNfc -> _state.value = State.ReviewMrz(s.mrz)
+            is State.ChipRead -> _state.value = State.ScanPhoto
+            is State.SelfieCheck -> _state.value = State.ChipRead(s.summary)
+            is State.DigitalIdIssue -> _state.value = State.SelfieCheck(s.summary)
+            is State.Fatal -> {
+                val mrz = lastMrzForNfc
+                _state.value = if (mrz != null) State.WaitNfc(mrz) else State.Welcome
+            }
+        }
+        return true
+    }
+
     fun goToScan() {
         _state.value = State.ScanPhoto
+    }
+
+    fun openDocumentOnboarding() {
+        _state.value = State.DocumentOnboarding()
+    }
+
+    fun updateDocumentName(value: String) {
+        val s = _state.value as? State.DocumentOnboarding ?: return
+        _state.value = s.copy(name = value, error = null)
+    }
+
+    fun updateDocumentDateOfBirth(value: String) {
+        val s = _state.value as? State.DocumentOnboarding ?: return
+        _state.value = s.copy(dateOfBirth = value, error = null)
+    }
+
+    fun markDocumentSubmitted(document: DocumentEvidence, source: String) {
+        val s = _state.value as? State.DocumentOnboarding ?: return
+        _state.value = s.copy(
+            submittedDocuments = s.submittedDocuments + document,
+            lastDocumentAction = "${document.label} added from $source",
+            error = null,
+        )
+    }
+
+    fun markDocumentSelfieCaptured(bitmap: Bitmap) {
+        val s = _state.value as? State.DocumentOnboarding ?: return
+        _state.value = s.copy(
+            selfieBase64 = bitmap.toJpegBase64(),
+            lastDocumentAction = "Profile selfie added",
+            error = null,
+        )
+    }
+
+    fun completeDocumentDigitalId(): Boolean {
+        val s = _state.value as? State.DocumentOnboarding ?: return false
+        val holderName = s.name.trim().ifBlank {
+            _state.value = s.copy(error = "Enter the ID holder's name")
+            return false
+        }
+        val dob = s.dateOfBirth.trim().ifBlank {
+            _state.value = s.copy(error = "Enter the ID holder's date of birth")
+            return false
+        }
+        val numericId = generalPreferences.digitalIdNumericId.get().takeIf { it > 0L } ?: generateEidNumber()
+        val credentialId = "EID-$numericId"
+        val keyPair = VerIdCredentialCrypto.generateKeyPair()
+        val reliability = documentReliability(s.submittedDocuments)
+
+        generalPreferences.digitalIdNumericId.set(numericId)
+        generalPreferences.digitalIdHolderName.set(holderName)
+        generalPreferences.digitalIdDocumentNumber.set(s.submittedDocuments.bestDocumentLabel())
+        generalPreferences.digitalIdVerificationSources.set(s.submittedDocuments.documentLabels())
+        generalPreferences.digitalIdDateOfBirth.set(dob)
+        generalPreferences.digitalIdExpiry.set("Document review")
+        generalPreferences.digitalIdCredentialId.set(credentialId)
+        generalPreferences.digitalIdPublicKeyBase64.set(keyPair.publicKeyBase64)
+        generalPreferences.digitalIdPrivateKeyBase64.set(keyPair.privateKeyBase64)
+        generalPreferences.digitalIdReliability.set(reliability)
+        generalPreferences.digitalIdPortraitBase64.set(s.selfieBase64)
+        generalPreferences.digitalIdGenerated.set(true)
+        generalPreferences.passportOnboardingCompleted.set(true)
+
+        screenModelScope.launch {
+            SupabaseUsersApi.upsertUser(
+                client = okHttpClient,
+                id = numericId,
+                name = holderName,
+                dob = dob,
+                reliability = reliability,
+                publicKey = keyPair.publicKeyBase64,
+            )
+        }
+        return true
     }
 
     fun openManualEntry() {
@@ -181,13 +294,19 @@ class PassportOnboardingScreenModel(
         val numericId = generalPreferences.digitalIdNumericId.get().takeIf { it > 0L } ?: generateEidNumber()
         val credentialId = "EID-$numericId"
         val dob = mrz.dateOfBirth.toDisplayDate()
+        val reliability = 100L
 
         generalPreferences.digitalIdNumericId.set(numericId)
         generalPreferences.digitalIdHolderName.set(holderName)
         generalPreferences.digitalIdDocumentNumber.set(documentNumber)
+        generalPreferences.digitalIdVerificationSources.set("Passport NFC")
         generalPreferences.digitalIdDateOfBirth.set(dob)
         generalPreferences.digitalIdExpiry.set(mrz.dateOfExpiry.ifBlank { "2030-01-01" })
         generalPreferences.digitalIdCredentialId.set(credentialId)
+        val keyPair = VerIdCredentialCrypto.generateKeyPair()
+        generalPreferences.digitalIdPublicKeyBase64.set(keyPair.publicKeyBase64)
+        generalPreferences.digitalIdPrivateKeyBase64.set(keyPair.privateKeyBase64)
+        generalPreferences.digitalIdReliability.set(reliability)
         summary.portrait?.let { portrait ->
             generalPreferences.digitalIdPortraitBase64.set(portrait.toJpegBase64())
         }
@@ -200,6 +319,8 @@ class PassportOnboardingScreenModel(
                 id = numericId,
                 name = holderName,
                 dob = dob,
+                reliability = reliability,
+                publicKey = keyPair.publicKeyBase64,
             )
         }
     }
@@ -221,5 +342,19 @@ class PassportOnboardingScreenModel(
 
     private fun generateEidNumber(): Long {
         return System.currentTimeMillis()
+    }
+
+    private fun documentReliability(documents: Set<DocumentEvidence>): Long {
+        return documents.maxOfOrNull { it.reliability } ?: 10L
+    }
+
+    private fun Set<DocumentEvidence>.bestDocumentLabel(): String {
+        return maxByOrNull { it.reliability }?.label ?: "Self-declared"
+    }
+
+    private fun Set<DocumentEvidence>.documentLabels(): String {
+        return sortedByDescending { it.reliability }
+            .joinToString(", ") { it.label }
+            .ifBlank { "Self-declared" }
     }
 }

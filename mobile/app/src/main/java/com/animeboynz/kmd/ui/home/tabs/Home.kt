@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -66,16 +67,16 @@ import com.animeboynz.kmd.ui.preferences.PreferencesScreen
 import okhttp3.OkHttpClient
 import org.koin.compose.koinInject
 
-object MyId : Tab {
-    private fun readResolve(): Any = MyId
+object Home : Tab {
+    private fun readResolve(): Any = Home
 
     override val options: TabOptions
         @Composable
         get() {
-            val image = rememberVectorPainter(Icons.AutoMirrored.Filled.ManageSearch)
+            val image = rememberVectorPainter(Icons.Filled.Home)
             return TabOptions(
                 index = 0u,
-                title = stringResource(R.string.my_id),
+                title = stringResource(R.string.home),
                 icon = image,
             )
         }
@@ -93,7 +94,7 @@ object MyId : Tab {
                 topBar = {
                     TopAppBar(
                         title = {
-                            Text(stringResource(R.string.my_id))
+                            Text(stringResource(R.string.home))
                         },
                         actions = {
                             IconButton(onClick = { navigator.push(PreferencesScreen) }) {
@@ -144,11 +145,6 @@ private fun DigitalIdDashboard(
     }
     val isPassportNfcVerified = reliability >= 100L
     val verificationStatus = if (isPassportNfcVerified) "Verified" else "Partially Verified"
-    val verificationDetail = if (isPassportNfcVerified) {
-        "Passport NFC verified"
-    } else {
-        "Documents: $verificationSources"
-    }
 
     LaunchedEffect(generated, publicKey) {
         if (generated && publicKey.isNotBlank()) {
@@ -210,11 +206,6 @@ private fun DigitalIdDashboard(
                 style = MaterialTheme.typography.headlineLarge,
                 fontSize = 36.sp,
                 color = PassportKycColors.text,
-            )
-            Text(
-                text = verificationDetail,
-                style = MaterialTheme.typography.bodyMedium,
-                color = PassportKycColors.muted,
             )
             Text(
                 text = "Reliability: ${reliability.coerceIn(0L, 100L)}%",

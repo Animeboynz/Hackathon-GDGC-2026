@@ -66,7 +66,7 @@
     <string name="input_errors_warning">Complete all required fields</string>
 
     //SKU Search Tab
-    <string name="my_id">My ID</string>
+    <string name="home">Home</string>
     <string name="sku_search_bar">Search products...</string>
     <string name="product_details">Product Details</string>
     <string name="product_found">Selected Item Found</string>
@@ -78,7 +78,9 @@
     <string name="search_url_c">https://www.kathmanduoutdoor.ca/catalogsearch/result/?q=%s</string>
 
     //Tools Tab
+    <string name="my_id">My ID</string>
     <string name="tools_tab">Tools</string>
+    <string name="my_qr">My QR</string>
     <string name="tools_cash_count">Cash Count</string>
     <string name="tools_cash_count_quantity">Qty</string>
     <string name="tools_cash_count_banking">Banking</string>
@@ -175,7 +177,7 @@
 
     // Passport onboarding
     <string name="passport_onboarding_title">Verify identity</string>
-    <string name="passport_onboarding_welcome_subtitle">Next, we\'ll read your passport MRZ, then verify the secure NFC chip matches — same flow as our web demo.</string>
+    <string name="passport_onboarding_welcome_subtitle">Next, we\'ll read your passport MRZ, then verify the secure NFC chip matches.</string>
     <string name="passport_onboarding_bullet_chip">Use a passport with the chip symbol on the cover</string>
     <string name="passport_onboarding_bullet_remove">Remove thick covers, stickers, or metal objects</string>
     <string name="passport_onboarding_bullet_hold">Hold your phone flat against the passport — try the back cover first</string>

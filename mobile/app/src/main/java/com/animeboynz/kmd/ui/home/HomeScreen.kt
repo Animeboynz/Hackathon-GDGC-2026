@@ -29,9 +29,8 @@ import cafe.adriel.voyager.navigator.tab.TabNavigator
 import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.animeboynz.kmd.presentation.Screen
 import com.animeboynz.kmd.presentation.util.Tab
-import com.animeboynz.kmd.ui.home.tabs.OrdersTab
-import com.animeboynz.kmd.ui.home.tabs.MyId
-import com.animeboynz.kmd.ui.home.tabs.ToolsTab
+import com.animeboynz.kmd.ui.home.tabs.Home
+import com.animeboynz.kmd.ui.home.tabs.MyQR
 import com.animeboynz.kmd.ui.home.tabs.VerifyTab
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -49,14 +48,13 @@ object HomeScreen : Screen() {
         val generalPreferences = koinInject<GeneralPreferences>()
 
         val tabs = buildList {
-            add(OrdersTab)
-            add(MyId)
-            add(ToolsTab)
+            add(Home)
+            add(MyQR)
             add(VerifyTab)
         }
 
         val navigator = LocalNavigator.currentOrThrow
-        val startTab = if (generalPreferences.digitalIdGenerated.get()) MyId else tabs.first()
+        val startTab = if (generalPreferences.digitalIdGenerated.get()) Home else tabs.first()
 
         TabNavigator(
             tab = startTab,

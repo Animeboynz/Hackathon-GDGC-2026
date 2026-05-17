@@ -49,6 +49,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +71,11 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.animeboynz.kmd.R
+import com.animeboynz.kmd.crypto.VerIdCredentialCrypto
+import com.animeboynz.kmd.network.SupabaseUsersApi
+import com.animeboynz.kmd.nfc.NfcTagDispatcher
+import com.animeboynz.kmd.nfc.VerIdNfcCredentialReader
+import com.animeboynz.kmd.preferences.GeneralPreferences
 import com.animeboynz.kmd.presentation.util.Tab
 import com.animeboynz.kmd.ui.onboarding.PassportKycColors
 import com.animeboynz.kmd.ui.onboarding.PassportKycTheme
@@ -80,7 +87,10 @@ import com.google.zxing.MultiFormatReader
 import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import org.json.JSONObject
+import org.koin.compose.koinInject
 
 object VerifyTab : Tab {
     private fun readResolve(): Any = VerifyTab
@@ -135,17 +145,28 @@ private data class ScannedCredential(
     val dateOfBirth: String,
     val method: String,
     val imageBase64: String,
+    val publicKeyBase64: String,
+    val signedReliability: Long,
+    val timePeriod: Long,
+    val isExpired: Boolean,
     val rawPayload: String,
 )
 
 @Composable
 private fun VerifyQrScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val okHttpClient = koinInject<OkHttpClient>()
+    val preferences = koinInject<GeneralPreferences>()
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     var scannedCredential by remember { mutableStateOf<ScannedCredential?>(null) }
+    var reliabilityInfo by remember { mutableStateOf<SupabaseUsersApi.UserReliability?>(null) }
     var scanError by remember { mutableStateOf<String?>(null) }
+    var reputationMessage by remember { mutableStateOf<String?>(null) }
+    var isVoting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val currentScannedCredential by rememberUpdatedState(scannedCredential)
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasCameraPermission = granted
     }
@@ -156,6 +177,46 @@ private fun VerifyQrScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    DisposableEffect(Unit) {
+        NfcTagDispatcher.consumer = { tag ->
+            if (currentScannedCredential == null) {
+                scope.launch {
+                    VerIdNfcCredentialReader.read(tag).fold(
+                        onSuccess = { raw ->
+                            parseCredential(raw).fold(
+                                onSuccess = {
+                                    scannedCredential = it
+                                    reliabilityInfo = null
+                                    reputationMessage = "Received VerID over NFC."
+                                    scanError = null
+                                },
+                                onFailure = { error ->
+                                    scanError = error.message ?: "Could not decode NFC VerID"
+                                },
+                            )
+                        },
+                        onFailure = { error ->
+                            scanError = error.message ?: "Could not read VerID over NFC"
+                        },
+                    )
+                }
+            }
+        }
+        onDispose {
+            NfcTagDispatcher.consumer = null
+        }
+    }
+
+    LaunchedEffect(scannedCredential?.publicKeyBase64) {
+        val publicKey = scannedCredential?.publicKeyBase64 ?: return@LaunchedEffect
+        reliabilityInfo = null
+        reputationMessage = null
+        SupabaseUsersApi.getReliabilityForPublicKey(okHttpClient, publicKey).fold(
+            onSuccess = { reliabilityInfo = it },
+            onFailure = { reputationMessage = it.message ?: "Could not load reliability from Supabase" },
+        )
+    }
+
     Column(modifier = modifier.padding(top = 16.dp, bottom = 24.dp)) {
         Text(
             text = "Scan another VerID",
@@ -164,7 +225,7 @@ private fun VerifyQrScreen(modifier: Modifier = Modifier) {
             fontSize = 24.sp,
         )
         Text(
-            text = "Point your camera at another user's ID QR to inspect their credential details.",
+            text = "Point your camera at another user's ID QR, or touch phones while they have NFC sharing open.",
             modifier = Modifier.padding(top = 6.dp),
             color = PassportKycColors.muted,
             fontSize = 14.sp,
@@ -178,6 +239,8 @@ private fun VerifyQrScreen(modifier: Modifier = Modifier) {
                     parseCredential(raw).fold(
                         onSuccess = {
                             scannedCredential = it
+                            reliabilityInfo = null
+                            reputationMessage = null
                             scanError = null
                         },
                         onFailure = { error ->
@@ -205,8 +268,44 @@ private fun VerifyQrScreen(modifier: Modifier = Modifier) {
         } else {
             VerifiedCredentialCard(
                 credential = scannedCredential!!,
+                reliabilityInfo = reliabilityInfo,
+                reputationMessage = reputationMessage,
+                isVoting = isVoting,
+                onVote = { isReliable ->
+                    val targetKey = scannedCredential?.publicKeyBase64
+                    val authorKey = preferences.digitalIdPublicKeyBase64.get()
+                    when {
+                        targetKey == null -> {
+                            reputationMessage = "Scan a VerID before rating."
+                        }
+                        authorKey.isBlank() -> {
+                            reputationMessage = "Create your own VerID before rating another user."
+                        }
+                        authorKey == targetKey -> {
+                            reputationMessage = "You cannot rate your own ID."
+                        }
+                        else -> {
+                            isVoting = true
+                            SupabaseUsersApi.submitReputationVote(
+                                client = okHttpClient,
+                                authorPublicKey = authorKey,
+                                targetPublicKey = targetKey,
+                                isReliable = isReliable,
+                            ).fold(
+                                onSuccess = {
+                                    reliabilityInfo = it
+                                    reputationMessage = if (isReliable) "Marked as reliable." else "Marked as unreliable."
+                                },
+                                onFailure = { reputationMessage = it.message ?: "Could not submit vote" },
+                            )
+                            isVoting = false
+                        }
+                    }
+                },
                 onScanAgain = {
                     scannedCredential = null
+                    reliabilityInfo = null
+                    reputationMessage = null
                     scanError = null
                 },
             )
@@ -271,9 +370,14 @@ private fun QrScannerCard(
 @Composable
 private fun VerifiedCredentialCard(
     credential: ScannedCredential,
+    reliabilityInfo: SupabaseUsersApi.UserReliability?,
+    reputationMessage: String?,
+    isVoting: Boolean,
+    onVote: suspend (Boolean) -> Unit,
     onScanAgain: () -> Unit,
 ) {
     val portraitBitmap = remember(credential.imageBase64) { credential.imageBase64.decodeBitmapOrNull() }
+    val scope = rememberCoroutineScope()
 
     Card(
         modifier = Modifier
@@ -287,27 +391,41 @@ private fun VerifiedCredentialCard(
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 PassportPhotoThumb(bitmap = portraitBitmap, sizeDp = 82)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Verified credential", color = Color.White.copy(alpha = 0.72f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (credential.isExpired) "Expired credential" else "Verified credential",
+                        color = if (credential.isExpired) Color(0xFFFCA5A5) else Color.White.copy(alpha = 0.72f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Text(credential.name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text(credential.credentialId, color = Color.White.copy(alpha = 0.78f), fontSize = 13.sp)
                 }
             }
+            InfoPill("Credential status", if (credential.isExpired) "Expired ID" else "Current 30-second ID")
             InfoPill("Verification method", credential.method)
             InfoPill("Document", credential.documentNumber)
             InfoPill("Date of birth", credential.dateOfBirth)
-            InfoPill("Photo", if (credential.imageBase64.isBlank()) "No embedded photo" else "Embedded Base64 JPEG")
-
-            Text(
-                text = credential.rawPayload,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .padding(12.dp),
-                color = Color.White.copy(alpha = 0.78f),
-                fontSize = 11.sp,
-                maxLines = 5,
+            InfoPill(
+                "Reliability",
+                reliabilityInfo?.let { "${it.effectiveReliability}% (${it.baseReliability}% document score)" }
+                    ?: "${credential.signedReliability}% signed claim",
             )
+            InfoPill("Signature", "Verified with QR public key")
+            InfoPill("Photo", "Not embedded in QR")
+            InfoPill("Public key", credential.publicKeyBase64.take(16) + "...")
+
+            Text("Rate this user", color = Color.White.copy(alpha = 0.72f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { scope.launch { onVote(true) } }, enabled = !isVoting, modifier = Modifier.weight(1f)) {
+                    Text("Thumbs up", color = PassportKycColors.lavender, fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = { scope.launch { onVote(false) } }, enabled = !isVoting, modifier = Modifier.weight(1f)) {
+                    Text("Thumbs down", color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold)
+                }
+            }
+            reputationMessage?.let {
+                Text(it, color = Color.White.copy(alpha = 0.78f), fontSize = 12.sp)
+            }
         }
     }
 
@@ -476,16 +594,36 @@ private fun ByteArray.rotateCounterClockwise(width: Int, height: Int): ByteArray
 
 private fun parseCredential(raw: String): Result<ScannedCredential> = runCatching {
     val json = JSONObject(raw)
+    val version = json.optInt("v", 1)
+    if (json.optString("t") != "verid" || version < 2) {
+        error("This is not a signed VerID QR")
+    }
+
+    val publicKey = json.getString("pub")
+    val encodedData = json.getString("data")
+    val signature = json.getString("sig")
+    if (!VerIdCredentialCrypto.verify(publicKey, encodedData, signature)) {
+        error("Could not verify this ID signature")
+    }
+
+    val data = JSONObject(VerIdCredentialCrypto.decodeText(encodedData))
+    val timePeriod = data.optLong("tp", -1L)
     ScannedCredential(
-        name = json.optString("n", json.optString("name", json.optString("holderName", "Unknown holder"))),
-        credentialId = json.optString("cid", json.optString("credentialId", "-")),
-        documentNumber = json.optString("doc", json.optString("documentNumber", "-")),
-        dateOfBirth = json.optString("dob", json.optString("dateOfBirth", "-")),
-        method = json.optString("m", json.optString("method", json.optString("verificationMethod", "QR"))),
-        imageBase64 = json.optString("img", json.optString("photoBase64", "")),
+        name = data.optString("n", "Unknown holder"),
+        credentialId = data.optString("cid", "-"),
+        documentNumber = data.optString("doc", "-"),
+        dateOfBirth = data.optString("dob", "-"),
+        method = data.optString("m", "QR"),
+        imageBase64 = "",
+        publicKeyBase64 = publicKey,
+        signedReliability = data.optLong("rel", 0L).coerceIn(0L, 100L),
+        timePeriod = timePeriod,
+        isExpired = timePeriod != currentVerIdTimePeriod(),
         rawPayload = raw,
     )
 }
+
+private fun currentVerIdTimePeriod(): Long = System.currentTimeMillis() / 30_000L
 
 private fun String.decodeBitmapOrNull(): Bitmap? {
     if (isBlank()) return null
